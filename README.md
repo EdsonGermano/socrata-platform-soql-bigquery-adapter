@@ -1,7 +1,7 @@
-soql-postgres-adapter
+soql-bigquery-adapter
 =====================
 
-Postgres Adapter for SODAServer
+BigQuery Adapter for SODAServer
 
 ## Build Requirements
 sbt
@@ -21,9 +21,9 @@ sbt test package assembly
 
 For active development, when you always want the latest up to date code in your repo, you will probably be executing this from an SBT shell:
 
-    soql-postgres-adapter/run
+    soql-bigquery-adapter/run
 
-For running the soql-postgres-adapter as one of several microservices, it might
+For running the soql-bigquery-adapter as one of several microservices, it might
 be better to build the assembly and run it to save on memory:
 
     bin/start_pg_adapter.sh
