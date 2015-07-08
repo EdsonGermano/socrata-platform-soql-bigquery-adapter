@@ -1,0 +1,2 @@
+first"172.19.12.80"
+addressConfigConfig(SimpleConfigObject({"com":{"socrata":{"soql-server-bq":{"service-advertisement":{"address":"172.19.12.80"}}}}}))

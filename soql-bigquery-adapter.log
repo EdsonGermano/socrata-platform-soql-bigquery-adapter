@@ -1,0 +1,35 @@
+com.socrata.datacoordinator.common.DataSourceConfig@24b07b86
+[main] INFO CuratorFrameworkImpl 2015-07-08 14:50:26,179 Starting
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:zookeeper.version=3.4.6-1569965, built on 02/20/2014 09:09 GMT
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:host.name=localhost
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:java.version=1.7.0_79
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:java.vendor=Oracle Corporation
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:java.home=/Library/Java/JavaVirtualMachines/jdk1.7.0_79.jdk/Contents/Home/jre
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:java.class.path=soql-server-bq/target/scala-2.10/soql-server-bq-assembly-0.6.11-SNAPSHOT.jar
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:java.library.path=/Users/annasapek/Library/Java/Extensions:/Library/Java/Extensions:/Network/Library/Java/Extensions:/System/Library/Java/Extensions:/usr/lib/java:.
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:java.io.tmpdir=/var/folders/sw/dngv_8c51sb79z74pbqxw_yc0000gp/T/
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:java.compiler=<NA>
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:os.name=Mac OS X
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:os.arch=x86_64
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:os.version=10.10.3
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:user.name=annasapek
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:user.home=/Users/annasapek
+[main] INFO ZooKeeper 2015-07-08 14:50:26,190 Client environment:user.dir=/Users/annasapek/Developer/Socrata/soql-bigquery-adapter
+[main] INFO ZooKeeper 2015-07-08 14:50:26,191 Initiating client connection, connectString=localhost:2181 sessionTimeout=40000 watcher=org.apache.curator.ConnectionState@46ae8bb1
+[main-SendThread(localhost:2181)] INFO ClientCnxn 2015-07-08 14:50:26,205 Opening socket connection to server localhost/0:0:0:0:0:0:0:1:2181. Will not attempt to authenticate using SASL (unknown error)
+[main-SendThread(localhost:2181)] INFO ClientCnxn 2015-07-08 14:50:26,212 Socket connection established to localhost/0:0:0:0:0:0:0:1:2181, initiating session
+[main-SendThread(localhost:2181)] INFO ClientCnxn 2015-07-08 14:50:26,220 Session establishment complete on server localhost/0:0:0:0:0:0:0:1:2181, sessionid = 0x14e6a76c0a90088, negotiated timeout = 40000
+[main-EventThread] INFO ConnectionStateManager 2015-07-08 14:50:26,224 State change: CONNECTED
+[MLog-Init-Reporter] INFO MLog 2015-07-08 14:50:26,465 MLog clients using slf4j logging.
+[main] INFO C3P0Registry 2015-07-08 14:50:26,600 Initializing c3p0-0.9.5-pre9 [built 08-October-2014 03:06:08 -0700; debug? true; trace: 10]
+[main] INFO AbstractPoolBackedDataSource 2015-07-08 14:50:26,655 Initializing c3p0 pool... com.mchange.v2.c3p0.PoolBackedDataSource@cf26d5f6 [ connectionPoolDataSource -> com.mchange.v2.c3p0.WrapperConnectionPoolDataSource@11058fac [ acquireIncrement -> 3, acquireRetryAttempts -> 30, acquireRetryDelay -> 1000, autoCommitOnClose -> false, automaticTestTable -> null, breakAfterAcquireFailure -> false, checkoutTimeout -> 0, connectionCustomizerClassName -> null, connectionTesterClassName -> com.mchange.v2.c3p0.impl.DefaultConnectionTester, contextClassLoaderSource -> caller, debugUnreturnedConnectionStackTraces -> false, factoryClassLocation -> null, forceIgnoreUnresolvedTransactions -> false, identityToken -> z8kflt9auz83jr15mi4lf|2ceba8a0, idleConnectionTestPeriod -> 60, initialPoolSize -> 3, maxAdministrativeTaskTime -> 0, maxConnectionAge -> 0, maxIdleTime -> 0, maxIdleTimeExcessConnections -> 300, maxPoolSize -> 20, maxStatements -> 0, maxStatementsPerConnection -> 0, minPoolSize -> 3, nestedDataSource -> org.postgresql.ds.PGSimpleDataSource@51bccf7e, preferredTestQuery -> SELECT 1, privilegeSpawnedThreads -> false, propertyCycle -> 0, statementCacheNumDeferredCloseThreads -> 0, testConnectionOnCheckin -> true, testConnectionOnCheckout -> false, unreturnedConnectionTimeout -> 0, usesTraditionalReflectiveProxies -> false; userOverrides: {} ], dataSourceName -> null, extensions -> {}, factoryClassLocation -> null, identityToken -> z8kflt9auz83jr15mi4lf|1c42e68a, numHelperThreads -> 3 ]
+[main] INFO MetricsReporter 2015-07-08 14:50:26,766 Starting metrics JMX reporter...
+[main] INFO log 2015-07-08 14:50:26,870 Logging initialized @1143ms
+[main] INFO QueryServer$ 2015-07-08 14:50:26,871 starting bbq query server
+[main] INFO SocrataServerJetty 2015-07-08 14:50:26,930 Hooking SIGTERM and SIGINT
+[main] INFO SocrataServerJetty 2015-07-08 14:50:26,930 Starting server
+[main] INFO Server 2015-07-08 14:50:26,931 jetty-9.2.z-SNAPSHOT
+[main] INFO ServerConnector 2015-07-08 14:50:26,970 Started ServerConnector@3ee28acc{HTTP/1.1}{0.0.0.0:6060}
+[main] INFO Server 2015-07-08 14:50:26,970 Started @1245ms
+[main] INFO SocrataServerJetty 2015-07-08 14:50:26,971 Registering with broker
+[main] INFO SocrataServerJetty 2015-07-08 14:50:27,053 Going to sleep...
