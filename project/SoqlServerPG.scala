@@ -13,7 +13,10 @@ object SoqlServerPG {
     secondarylib,
     socrataHttpCuratorBroker,
     metricsJetty,
-    metricsGraphite
+    metricsGraphite,
+    googleApiClient,
+    googleApi,
+    googleHttpClient
   )
 }
 
