@@ -469,7 +469,7 @@ object QueryServer extends DynamicPortMap with Logging {
                         SocrataServerJetty.defaultOptions.
                        withPort(config.port).
                        withExtraHandlers(List(SocrataHttpSupport.getHandler(config.metrics))).
-//                       withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
+                       withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
                        withBroker(curatorBroker))
       logger.info("starting bbq query server")
       server.run()
