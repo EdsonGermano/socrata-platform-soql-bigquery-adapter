@@ -6,13 +6,13 @@ object Build extends sbt.Build {
     "soql-postgres-adapter",
     file(".")
   ).settings(BuildSettings.buildSettings: _*)
-   .aggregate(commonPG, storePG, soqlServerPG)
-   .dependsOn(commonPG, storePG, soqlServerPG)
+   .aggregate(commonBQ, storeBQ, soqlServerBQ)
+   .dependsOn(commonBQ, storeBQ, soqlServerBQ)
 
   def p(name: String, settings: { def settings: Seq[Setting[_]] }, dependencies: ClasspathDep[ProjectReference]*) =
     Project(name, file(name)).settings(settings.settings : _*).dependsOn(dependencies: _*)
 
-  lazy val commonPG = p("common-pg", CommonPG)
-  lazy val storePG = p("store-pg", StorePG) dependsOn(commonPG % "test->test;compile->compile")
-  lazy val soqlServerPG = p("soql-server-bq", SoqlServerPG) dependsOn(storePG % "test->test;compile->compile")
+  lazy val commonBQ = p("common-bq", CommonPG)
+  lazy val storeBQ = p("store-bq", StorePG) dependsOn(commonBQ % "test->test;compile->compile")
+  lazy val soqlServerBQ = p("soql-server-bq", SoqlServerPG) dependsOn(storeBQ % "test->test;compile->compile")
 }
