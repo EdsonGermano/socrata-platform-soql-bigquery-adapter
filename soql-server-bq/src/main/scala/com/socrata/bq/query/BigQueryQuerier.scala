@@ -1,38 +1,37 @@
 package com.socrata.bq.query
 
+import java.io.IOException
+
 import com.google.api.services.bigquery.Bigquery
 import com.google.api.services.bigquery.model._
-import scala.collection.immutable.Map
-import scala.util.parsing.json.JSONObject
+
 import scala.collection.JavaConversions._
-import java.io.IOException
-import java.util.Iterator
-import java.util.List
+
+
+import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 object BigQueryQuerier {
   @throws(classOf[Exception])
-  def query(queryString: String) {
+  def query(queryString: String): ArrayBuffer[mutable.Buffer[AnyRef]] = {
     val projectId: String = "thematic-bee-98521"
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
-    val pages: Iterator[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime)
-    val difference: Long = System.currentTimeMillis - curTime
 
-    var results: List[TableRow] = null
-    while (pages.hasNext) {
-      results = pages.next.getRows
-    }
+    val allPages: Iterator[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime)
 
-    var map = Map[String, Object]()
+    val result = ArrayBuffer[mutable.Buffer[mutable.Buffer[AnyRef]]]()
 
-    map = map + (("result", results))
+    // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
+    // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
+    // there is no object.
+    allPages.map(x => x.getRows.map(r => r.getF.map(f => f.getV.getClass.getSimpleName match {
+      case "String" => f.getV
+      case _ => null
+    }))).foreach(e => result.add(e))
 
-//    val response : Map[String, Object] = results map {x : TableRow => ("result" -> x.getF.head.getV : Object)} toMap
-    val jsonOb = new JSONObject(map)
-    println(jsonOb)
-
-    System.out.println("elapsed milliseconds bigquery: " + difference)
+    result.flatten
   }
 
   /**
@@ -53,7 +52,7 @@ object BigQueryQuerier {
     val getRequest: Bigquery#Jobs#Get = bigquery.jobs.get(projectId, query.getJobReference.getJobId)
     BigqueryUtils.pollJob(getRequest, waitTime)
     val resultsRequest: Bigquery#Jobs#GetQueryResults = bigquery.jobs.getQueryResults(projectId, query.getJobReference.getJobId)
-    return BigqueryUtils.getPages(resultsRequest)
+    BigqueryUtils.getPages(resultsRequest)
   }
 
   /**
@@ -73,6 +72,7 @@ object BigQueryQuerier {
       queryConfig.setPriority("BATCH")
     }
     val job: Job = new Job().setConfiguration(new JobConfiguration().setQuery(queryConfig))
-    return bigquery.jobs.insert(projectId, job).execute
+    bigquery.jobs.insert(projectId, job).execute
   }
 }
+
