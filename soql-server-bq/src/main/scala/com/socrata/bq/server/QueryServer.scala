@@ -409,9 +409,9 @@ object QueryServer extends DynamicPortMap with Logging {
     if(ifaces.isEmpty) config
     else {
       val first = JString(ifaces.iterator.next().getHostAddress)
-      Console.err.println("first" + first)
+//      Console.err.println("first" + first)
       val addressConfig = ConfigFactory.parseString("com.socrata.soql-server-bq.service-advertisement.address=" + first)
-      Console.err.println("addressConfig" + addressConfig)
+//      Console.err.println("addressConfig" + addressConfig)
       config.withFallback(addressConfig)
     }
   }

@@ -1,16 +1,22 @@
 package com.socrata.bq.query
 
+import com.google.api.services.bigquery.model.TableRow
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.datacoordinator.MutableRow
+import com.socrata.datacoordinator.{Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.bq.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.types.SoQLValue
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
+
+import com.socrata.bq.soql.bqreps.TextRep
+
+import scala.collection.mutable.ArrayBuffer
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
@@ -41,19 +47,39 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // every time, which is very expensive.  Move that out of the inner loop of decodeRow.
     // Also, the orderedMap is extremely inefficient and very complex to debug.
     // TODO: refactor PG server not to use Ordered Map.
-    val decoders = querySchema.map { case (cid, rep) =>
-      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
-    }.toArray
+//    val decoders = querySchema.map { case (cid, rep) =>
+//      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
+//    }.toArray
+
+//    val decoders = querySchema.map { case (cid, rep) =>
+//      (cid, rep.toSoQL(_, _))
+//    }.toArray
+
+    val decoders = Array(Tuple2(new ColumnId(0), new TextRep("field1").toSoQL(_, _)))
 
     // get rows
     if (analysis.selection.size > 0) {
       val rs = executeSql(conn, toSql(analysis, dataTableName))
       // Statement and resultset are closed by the iterator.
-      new ResultSetIt(rowCount, rs, decodeRow(decoders))
+//      new ResultSetIt(rowCount, rs, decodeRow(decoders))
+      new BigQueryResultSetIt(BigQueryQuerier.query("select field1 from [wilbur.test]"), decodeBigQueryRow(decoders))
     } else {
       logger.debug("Queried a dataset with no user columns")
       EmptyIt
     }
+  }
+
+  def decodeBigQueryRow(decoders: Array[(ColumnId, (ArrayBuffer[String], Int) => SoQLValue)])
+                       (m : ArrayBuffer[String]): com.socrata.datacoordinator.Row[CV] = {
+
+    val row = new MutableRow[SoQLValue]
+    var i = 1
+
+    decoders.foreach { case (cid, bqExtractor) =>
+        row(cid) = bqExtractor(m, i)
+        i += 1
+    }
+    row.freeze()
   }
 
   def decodeRow(decoders: Array[(ColumnId, (ResultSet, Int) => CV, Int)])(rs: ResultSet):
@@ -117,6 +143,31 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
         rs.close()
       }
     }
+  }
+
+  class BigQueryResultSetIt(rows: Array[Map[String, String]], toRow: (Map[String, String] => Row[CV]))
+    extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
+
+    private val it: Iterator[Map[String, String]] = rows.iterator
+    private var _hasNext: Boolean = it.hasNext
+
+    override val rowCount: Option[Long] = _
+
+    override def next(): Row[CV] = {
+      if (hasNext) {
+        val upNext = it.next
+        _hasNext = it.hasNext
+        toRow(upNext)
+      } else {
+        throw new Exception("No more data for the BigQueryResultSetIt")
+      }
+    }
+
+    override def hasNext: Boolean = {
+      _hasNext
+    }
+
+    override def close(): Unit = {}
   }
 
   object EmptyIt extends CloseableIterator[Nothing] with RowCount {
