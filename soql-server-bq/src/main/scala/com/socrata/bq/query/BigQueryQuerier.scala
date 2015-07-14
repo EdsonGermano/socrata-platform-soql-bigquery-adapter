@@ -1,6 +1,7 @@
 package com.socrata.bq.query
 
 import java.io.IOException
+import java.util.{Scanner}
 
 import com.google.api.services.bigquery.Bigquery
 import com.google.api.services.bigquery.model._
@@ -13,7 +14,7 @@ import scala.collection.mutable.ArrayBuffer
 
 object BigQueryQuerier {
   @throws(classOf[Exception])
-  def query(queryString: String): ArrayBuffer[mutable.Buffer[AnyRef]] = {
+  def query(queryString: String): ArrayBuffer[mutable.Buffer[String]] = {
     val projectId: String = "thematic-bee-98521"
     val batch: Boolean = false
     val waitTime: Long = 100
@@ -21,13 +22,13 @@ object BigQueryQuerier {
 
     val allPages: Iterator[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime)
 
-    val result = ArrayBuffer[mutable.Buffer[mutable.Buffer[AnyRef]]]()
+    val result = ArrayBuffer[mutable.Buffer[mutable.Buffer[String]]]()
 
     // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
     // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
     // there is no object.
     allPages.map(x => x.getRows.map(r => r.getF.map(f => f.getV.getClass.getSimpleName match {
-      case "String" => f.getV
+      case "String" => f.getV.toString
       case _ => null
     }))).foreach(e => result.add(e))
 
