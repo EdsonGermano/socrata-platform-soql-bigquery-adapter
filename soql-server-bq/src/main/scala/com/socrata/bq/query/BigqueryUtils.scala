@@ -2,11 +2,9 @@ package com.socrata.bq.query
 
 import com.google.api.client.json.GenericJson
 import com.google.api.services.bigquery.Bigquery
-import com.google.api.services.bigquery.Bigquery.Datasets
 import com.google.api.services.bigquery.BigqueryRequest
 import com.google.api.services.bigquery.model.DatasetList
 import com.google.api.services.bigquery.model.Job
-import com.google.api.services.bigquery.model.TableCell
 import com.google.api.services.bigquery.model.TableRow
 import java.io.IOException
 import java.io.PrintStream
@@ -64,7 +62,7 @@ object BigqueryUtils {
   def getPages[T <: GenericJson](requestTemplate: BigqueryRequest[T]): Iterator[T] = {
     class PageIterator extends Iterator[T] {
       private var request: BigqueryRequest[T] = null
-      private var hasNext: Boolean = true
+      private var itrHasNext: Boolean = true
 
       /**
        * Inner class that represents our iterator to page through results.
@@ -81,7 +79,7 @@ object BigqueryUtils {
        * @return True if there is another page of results.
        */
       def hasNext: Boolean = {
-        return hasNext
+        itrHasNext
       }
 
       /**
@@ -98,15 +96,9 @@ object BigqueryUtils {
             request = request.set("pageToken", response.get("pageToken"))
           }
           else {
-            hasNext = false
+            itrHasNext = false
           }
-          return response
-        }
-        catch {
-          case e: IOException => {
-            e.printStackTrace
-            return null
-          }
+          response
         }
       }
 
