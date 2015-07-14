@@ -9,9 +9,9 @@ class TextRep(val base : String) extends SoQLBigQueryReadRep[SoQLType, SoQLValue
 
   override def repType: SoQLType = SoQLText
 
-  override def toSoQL(value : AnyRef): SoQLValue = {
+  override def toSoQL(value : String): SoQLValue = {
     if (value == null) SoQLNull
-    else SoQLText(value.toString)
+    else SoQLText(value)
   }
 
 }

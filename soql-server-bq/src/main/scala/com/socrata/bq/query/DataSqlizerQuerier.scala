@@ -7,10 +7,10 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.{Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.bq.soql.ParametricSql
+import com.socrata.bq.soql.{SoQLBigQueryReadRep, BigQueryRepFactory, ParametricSql}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.types.SoQLValue
+import com.socrata.soql.types.{SoQLText, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
 
@@ -26,7 +26,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
                reqRowCount: Boolean,
-               querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]) :
+               querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
+               bqReps: Array[SoQLBigQueryReadRep[CT, CV]]) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     // get row count
@@ -48,20 +49,24 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // every time, which is very expensive.  Move that out of the inner loop of decodeRow.
     // Also, the orderedMap is extremely inefficient and very complex to debug.
     // TODO: refactor PG server not to use Ordered Map.
-//    val decoders = querySchema.map { case (cid, rep) =>
-//      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
-//    }.toArray
+    val decoders2 = querySchema.map { case (cid, rep) =>
+      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
+    }.toArray
 
 //    val decoders = querySchema.map { case (cid, rep) =>
 //      (cid, rep.toSoQL(_, _))
 //    }.toArray
 
-    val decoders = Array(Tuple2(new ColumnId(0), new TextRep("field1").toSoQL(_, _)))
+    val repFactory = new BigQueryRepFactory
+
+//    val test : SoQLBigQueryReadRep[CT, CV] = new TextRep("field0")
+
+    val decoders = Array(Tuple2(new ColumnId(0), bqReps(0).toSoQL(_)))
 
     // get rows
     if (analysis.selection.size > 0) {
-      val rs = executeSql(conn, toSql(analysis, dataTableName))
-      // Statement and resultset are closed by the iterator.
+//      val rs = executeSql(conn, toSql(analysis, dataTableName))
+//      Statement and resultset are closed by the iterator.
 //      new ResultSetIt(rowCount, rs, decodeBigQueryRow(decoders))
       new BigQueryResultSetIt(Option(10), BigQueryQuerier.query("select field1 from [wilbur.test]"), decodeBigQueryRow(decoders))
     } else {
@@ -70,8 +75,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
   }
 
-  def decodeBigQueryRow(decoders: Array[(ColumnId, AnyRef => CV)])
-                       (m : mutable.Buffer[AnyRef]): com.socrata.datacoordinator.Row[CV] = {
+  def decodeBigQueryRow(decoders: Array[(ColumnId, String => CV)])
+                       (m : mutable.Buffer[String]): com.socrata.datacoordinator.Row[CV] = {
 
     val row = new MutableRow[CV]
     var i = 0
@@ -146,10 +151,10 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
   }
 
-  class BigQueryResultSetIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[AnyRef]], toRow: (mutable.Buffer[AnyRef] => Row[CV]))
+  class BigQueryResultSetIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[String]], toRow: (mutable.Buffer[String] => Row[CV]))
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
-    private val it: Iterator[mutable.Buffer[AnyRef]] = rows.iterator
+    private val it: Iterator[mutable.Buffer[String]] = rows.iterator
     private var _hasNext: Boolean = it.hasNext
 
     override def next(): Row[CV] = {

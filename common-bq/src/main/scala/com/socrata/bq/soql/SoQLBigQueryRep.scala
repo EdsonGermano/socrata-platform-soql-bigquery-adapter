@@ -8,5 +8,5 @@ trait SoQLBigQueryRep[Type] {
 }
 
 trait SoQLBigQueryReadRep[Type, Value] extends SoQLBigQueryRep[Type] {
-  def toSoQL(value : AnyRef) : Value
+  def toSoQL(value : String) : Value
 }

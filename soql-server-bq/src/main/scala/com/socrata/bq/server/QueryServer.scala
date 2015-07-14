@@ -36,7 +36,7 @@ import com.socrata.bq.{SecondaryBase, Version}
 import com.socrata.bq.Schema._
 import com.socrata.bq.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
 import com.socrata.bq.server.config.{DynamicPortMap, QueryServerConfig}
-import com.socrata.bq.soql.{CaseSensitive, CaseSensitivity, Sqlizer, SqlizerContext}
+import com.socrata.bq.soql._
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 import com.socrata.bq.store._
 import com.socrata.soql.SoQLAnalysis
@@ -44,7 +44,7 @@ import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.CoreExpr
-import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
+import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
@@ -230,6 +230,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
+        // TESTING
+        val repFactory = new BigQueryRepFactory
+        val bqReps = Array(repFactory.bqRep(SoQLText, "field0"))
+
         val results = querier.query(
           analysis,
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
@@ -237,7 +241,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
             (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
           rowCount,
-          qryReps)
+          qryReps,
+          bqReps)
         (qrySchema, latestCopy.dataVersion, results)
       }
     }
