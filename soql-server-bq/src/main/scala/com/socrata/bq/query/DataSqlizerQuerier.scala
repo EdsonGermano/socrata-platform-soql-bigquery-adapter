@@ -17,6 +17,7 @@ import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
 import com.socrata.bq.soql.bqreps.TextRep
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
@@ -61,22 +62,22 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     if (analysis.selection.size > 0) {
       val rs = executeSql(conn, toSql(analysis, dataTableName))
       // Statement and resultset are closed by the iterator.
-//      new ResultSetIt(rowCount, rs, decodeRow(decoders))
-      new BigQueryResultSetIt(BigQueryQuerier.query("select field1 from [wilbur.test]"), decodeBigQueryRow(decoders))
+//      new ResultSetIt(rowCount, rs, decodeBigQueryRow(decoders))
+      new BigQueryResultSetIt(Option(10), BigQueryQuerier.query("select field1 from [wilbur.test]"), decodeBigQueryRow(decoders))
     } else {
       logger.debug("Queried a dataset with no user columns")
       EmptyIt
     }
   }
 
-  def decodeBigQueryRow(decoders: Array[(ColumnId, (ArrayBuffer[String], Int) => SoQLValue)])
-                       (m : ArrayBuffer[String]): com.socrata.datacoordinator.Row[CV] = {
+  def decodeBigQueryRow(decoders: Array[(ColumnId, AnyRef => CV)])
+                       (m : mutable.Buffer[AnyRef]): com.socrata.datacoordinator.Row[CV] = {
 
-    val row = new MutableRow[SoQLValue]
-    var i = 1
+    val row = new MutableRow[CV]
+    var i = 0
 
     decoders.foreach { case (cid, bqExtractor) =>
-        row(cid) = bqExtractor(m, i)
+        row(cid) = bqExtractor(m(i))
         i += 1
     }
     row.freeze()
@@ -145,13 +146,11 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
   }
 
-  class BigQueryResultSetIt(rows: Array[Map[String, String]], toRow: (Map[String, String] => Row[CV]))
+  class BigQueryResultSetIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[AnyRef]], toRow: (mutable.Buffer[AnyRef] => Row[CV]))
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
-    private val it: Iterator[Map[String, String]] = rows.iterator
+    private val it: Iterator[mutable.Buffer[AnyRef]] = rows.iterator
     private var _hasNext: Boolean = it.hasNext
-
-    override val rowCount: Option[Long] = _
 
     override def next(): Row[CV] = {
       if (hasNext) {
