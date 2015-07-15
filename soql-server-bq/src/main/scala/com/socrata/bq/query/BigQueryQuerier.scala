@@ -16,18 +16,19 @@ import scala.collection.mutable.ArrayBuffer
 object BigQueryQuerier {
 
   @throws(classOf[Exception])
-  def query(projectId : String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with BQSchema = {
+  def query(projectId : String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with BQSchema with TotalRowCount = {
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
 
     val allPages: Array[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime).toArray
 
-    val result = new ArrayBuffer[mutable.Buffer[String]]() with BQSchema
+    val result = new ArrayBuffer[mutable.Buffer[String]]() with BQSchema with TotalRowCount
 
 
     if (!allPages.isEmpty) {
       result.tableSchema = allPages(0).getSchema.getFields.toList
+      result.rowCount = allPages(0).getTotalRows().longValue()
       // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
       // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
       // there is no object.
