@@ -6,7 +6,8 @@ import com.socrata.soql.types._
 class BigQueryRepFactory {
 
   private val RepFactory = Map[SoQLType, String => SoQLBigQueryReadRep[SoQLType, SoQLValue]](
-    SoQLText -> (base => new TextRep(base))
+    SoQLText -> (base => new TextRep(base)),
+    SoQLDouble -> (base => new DoubleRep(base))
   )
 
   def bqRep(givenType : SoQLType, base : String) : SoQLBigQueryReadRep[SoQLType, SoQLValue] = {
