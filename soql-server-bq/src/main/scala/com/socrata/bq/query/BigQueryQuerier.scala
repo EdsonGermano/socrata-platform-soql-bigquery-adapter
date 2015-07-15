@@ -5,6 +5,7 @@ import java.util.{Scanner}
 
 import com.google.api.services.bigquery.Bigquery
 import com.google.api.services.bigquery.model._
+import com.socrata.bq.query.BQSchema
 
 import scala.collection.JavaConversions._
 
@@ -13,26 +14,29 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object BigQueryQuerier {
+
   @throws(classOf[Exception])
-  def query(queryString: String): ArrayBuffer[mutable.Buffer[String]] = {
-    val projectId: String = "thematic-bee-98521"
+  def query(projectId : String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with BQSchema = {
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
 
-    val allPages: Iterator[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime)
+    val allPages: Array[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime).toArray
 
-    val result = ArrayBuffer[mutable.Buffer[mutable.Buffer[String]]]()
+    val result = new ArrayBuffer[mutable.Buffer[String]]() with BQSchema
 
-    // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
-    // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
-    // there is no object.
-    allPages.map(x => x.getRows.map(r => r.getF.map(f => f.getV.getClass.getSimpleName match {
-      case "String" => f.getV.toString
-      case _ => null
-    }))).foreach(e => result.add(e))
 
-    result.flatten
+    if (!allPages.isEmpty) {
+      result.tableSchema = allPages(0).getSchema.getFields.toList
+      // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
+      // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
+      // there is no object.
+      allPages.map(x => x.getRows.map(r => r.getF.map(f => f.getV.getClass.getSimpleName match {
+        case "String" => f.getV.toString
+        case _ => null
+      }))).foreach(e => result.add(e.flatten))
+    }
+    result
   }
 
   /**
