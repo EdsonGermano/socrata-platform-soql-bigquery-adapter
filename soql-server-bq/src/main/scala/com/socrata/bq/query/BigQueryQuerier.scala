@@ -15,8 +15,7 @@ import scala.collection.mutable.ArrayBuffer
 object BigQueryQuerier {
 
   @throws(classOf[Exception])
-  def query(queryString: String): ArrayBuffer[mutable.Buffer[String]] with BQSchema with TotalRowCount = {
-    val projectId: String = "thematic-bee-98521"
+  def query(projectId: String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with BQSchema with TotalRowCount = {
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
