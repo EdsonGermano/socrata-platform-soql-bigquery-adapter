@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 
+import com.socrata.soql.functions.SoQLTypeInfo
+
 import scala.language.existentials
 
 import com.rojoma.json.v3.ast.JString
@@ -42,7 +44,7 @@ import com.socrata.bq.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{TypeName, ColumnName}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
@@ -230,9 +232,17 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
-        // TESTING
-        val repFactory = new BigQueryRepFactory
-        val bqReps = Array(repFactory.bqRep(SoQLText, "field0"))
+        // Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
+        // associated with each column. This should eventually replace the "qryReps" parametere
+        // to querier.query, but for now add it as an additional parameter "bqReps"
+        val repFactory = BigQueryRepFactory
+        val bqReps = qrySchema.mapValues(v => repFactory.bqRep(v.typ))
+
+        // Print the schema for this query
+        logger.info("Query schema: ")
+        qrySchema.foreach { case (k, v) =>
+          logger.info("" + k.toString + ": " + v.typ.toString)
+        }
 
         val results = querier.query(
           analysis,

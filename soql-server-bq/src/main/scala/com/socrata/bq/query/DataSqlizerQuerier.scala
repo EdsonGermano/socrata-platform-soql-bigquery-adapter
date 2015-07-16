@@ -24,7 +24,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: Array[SoQLBigQueryReadRep[CT, CV]]) :
+               bqReps: OrderedMap[ColumnId, SoQLBigQueryReadRep[CT, CV]]) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
@@ -35,7 +35,10 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
 //    }.toArray
 
-    val decoders = Array(Tuple2(new ColumnId(1), bqReps(0).toSoQL(_)))
+//    val decoders = Array(Tuple2(new ColumnId(1), bqReps(0).SoQL(_)))
+    val decoders = bqReps.map { case (cid, rep) =>
+      (cid, rep.SoQL(_))
+    }.toArray
 
     // get rows
     if (analysis.selection.size > 0) {
@@ -43,7 +46,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //      Statement and resultset are closed by the iterator.
 //      new ResultSetIt(rowCount, rs, decodeBigQueryRow(decoders))
 
-      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select field1 from [wilbur.test]")
+//      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select TIMESTAMP_TO_USEC(pickup_datetime) from [wilbur.nyc] limit 10")
+      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select field2 from [wilbur.test] limit 10")
 
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
 
@@ -74,7 +78,9 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     override def next(): Row[CV] = {
       if (hasNext) {
-        toRow(it.next())
+        val rowVal = it.next()
+        logger.info("BQ row value: " + rowVal)
+        toRow(rowVal)
       } else {
         throw new Exception("No more data for the BigQueryResultSetIt")
       }
