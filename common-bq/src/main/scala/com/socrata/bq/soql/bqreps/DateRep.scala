@@ -5,12 +5,13 @@ import com.socrata.soql.types.{SoQLNull, SoQLDate, SoQLValue, SoQLType}
 import org.joda.time.LocalDate
 
 class DateRep extends SoQLBigQueryReadRep[SoQLType, SoQLValue] with SoQLBigQueryWriteRep[SoQLType, SoQLValue] {
-  override def SoQL(value: String): SoQLValue = {
-    if (value == null) SoQLNull
-    else SoQLDate(LocalDate.parse(value))
-  }
+
+  override def repType: SoQLType = SoQLDate
 
   override def BigQueryType(soqlType: SoQLType): String = "TIMESTAMP"
 
-  override def repType: SoQLType = SoQLDate
+  override def SoQL(value: String): SoQLValue = {
+    if (value == null) SoQLNull
+    else SoQLDate(new LocalDate(value.toDouble.toLong))
+  }
 }
