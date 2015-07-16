@@ -8,7 +8,8 @@ object BigQueryRepFactory {
   private val RepFactory = Map[SoQLType, SoQLBigQueryReadRep[SoQLType, SoQLValue]](
     SoQLText -> new TextRep,
     SoQLNumber -> new DoubleRep,
-    SoQLFixedTimestamp -> new DateRep
+    SoQLFixedTimestamp -> new FixedTimestampRep,
+    SoQLDate -> new DateRep
   )
 
   def bqRep(givenType : SoQLType) : SoQLBigQueryReadRep[SoQLType, SoQLValue] = {

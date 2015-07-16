@@ -232,14 +232,17 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
-        // TESTING
+        // Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
+        // associated with each column. This should eventually replace the "qryReps" parametere
+        // to querier.query, but for now add it as an additional parameter "bqReps"
         val repFactory = BigQueryRepFactory
         val bqReps = qrySchema.mapValues(v => repFactory.bqRep(v.typ))
-//        val bqReps = qrySchema.foreach { case (k, v) =>
-//          val repType = SoQLTypeInfo.typeFor(TypeName(v.typeName))
-//          logger.info("Found type " + repType)
-//          repFactory.bqRep(repType.get)
-//        }
+
+        // Print the schema for this query
+        logger.info("Query schema: ")
+        qrySchema.foreach { case (k, v) =>
+          logger.info("" + k.toString + ": " + v.typ.toString)
+        }
 
         val results = querier.query(
           analysis,
