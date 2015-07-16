@@ -9,8 +9,9 @@ object BigQueryRepFactory {
     SoQLText -> new TextRep,
     SoQLNumber -> new NumberLikeRep(SoQLNumber(_)),
     SoQLFixedTimestamp -> new FixedTimestampRep,
-    SoQLDate -> new DateRep,
-    SoQLDouble -> new DoubleRep
+    SoQLDate -> new DateRep,    // Date may not be working correctly
+    SoQLDouble -> new DoubleRep,
+    SoQLBoolean -> new BooleanRep
   )
 
   def bqRep(givenType : SoQLType) : SoQLBigQueryReadRep[SoQLType, SoQLValue] = {
