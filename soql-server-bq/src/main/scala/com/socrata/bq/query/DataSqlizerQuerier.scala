@@ -46,7 +46,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //      Statement and resultset are closed by the iterator.
 //      new ResultSetIt(rowCount, rs, decodeBigQueryRow(decoders))
 
-      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select TIMESTAMP_TO_USEC(pickup_datetime) from [wilbur.nyc] limit 10")
+//      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select TIMESTAMP_TO_USEC(pickup_datetime) from [wilbur.nyc] limit 10")
+      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select passenger_count from [wilbur.nyc] limit 10")
 
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
 
