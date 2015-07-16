@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 
+import com.socrata.soql.functions.SoQLTypeInfo
+
 import scala.language.existentials
 
 import com.rojoma.json.v3.ast.JString
@@ -42,7 +44,7 @@ import com.socrata.bq.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{TypeName, ColumnName}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
@@ -231,8 +233,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
         // TESTING
-        val repFactory = new BigQueryRepFactory
-        val bqReps = Array(repFactory.bqRep(SoQLText, "field0"))
+        val repFactory = BigQueryRepFactory
+        val bqReps = qrySchema.mapValues(v => repFactory.bqRep(v.typ))
+//        val bqReps = qrySchema.foreach { case (k, v) =>
+//          val repType = SoQLTypeInfo.typeFor(TypeName(v.typeName))
+//          logger.info("Found type " + repType)
+//          repFactory.bqRep(repType.get)
+//        }
 
         val results = querier.query(
           analysis,
