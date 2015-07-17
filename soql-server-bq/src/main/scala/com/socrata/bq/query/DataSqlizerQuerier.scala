@@ -3,12 +3,13 @@ package com.socrata.bq.query
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.datacoordinator.{Row, MutableRow}
+import com.socrata.datacoordinator.{id, Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.bq.soql.{SoQLBigQueryReadRep, BigQueryRepFactory, ParametricSql}
+import com.socrata.bq.soql.{Escape, SoQLBigQueryReadRep, BigQueryRepFactory, ParametricSql}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.typed.ColumnRef
 import com.socrata.soql.types.{SoQLText, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
@@ -34,7 +35,9 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //    val decoders2 = querySchema.map { case (cid, rep) =>
 //      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
 //    }.toArray
-
+    val toSQLRep = toSql(analysis, "[nyc_taxi.ny_data]")
+    logger.debug("to sql representation: " + toSQLRep)
+//    formulateQuery(analysis, querySchema)
     val decoders = Array(Tuple2(new ColumnId(1), bqReps(0).toSoQL(_)))
 
     // get rows
@@ -43,8 +46,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //      Statement and resultset are closed by the iterator.
 //      new ResultSetIt(rowCount, rs, decodeBigQueryRow(decoders))
 
-      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select field1 from [wilbur.test]")
-
+      val bqResult = BigQueryQuerier.query("thematic-bee-98521", "select vendor_id from [nyc_taxi" +
+        ".ny_data] limit 10")
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
 
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
@@ -53,6 +56,26 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       EmptyIt
     }
   }
+
+  def formulateQuery(ana: SoQLAnalysis[UserColumnId, CT], querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]) = {
+    logger.info("IN FORMULATE QUERY METHOD " + ana)
+    val cs = ana.selection.values.map(e => "_%s".format(e.asInstanceOf[ColumnRef[UserColumnId, CT]].column.underlying))
+    val ts = ana.selection.values.map(_.asInstanceOf[ColumnRef[UserColumnId, CT]].typ)
+
+    logger.info(s"SELECT = $cs :: $ts")
+
+//    val where = ana.where.get.asInstanceOf[]
+//    logger.info(s"WHERE = $where")
+
+    logger.info("QUERY SCHEMA = " + querySchema)
+
+    val select = ana.selection.valuesIterator.toList.map(b => (b.productElement(0)))
+    logger.info("SELECTION MAPPED = " + select)
+
+
+  }
+
+
 
   def decodeBigQueryRow(decoders: Array[(ColumnId, String => CV)])
                        (m : mutable.Buffer[String]): com.socrata.datacoordinator.Row[CV] = {
