@@ -17,7 +17,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
 
   val underlying = Tuple3(analysis, tableName, allColumnReps)
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
     sql(false, rep, setParams, ctx, escape)
   }
 
@@ -25,13 +25,13 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    * For rowcount w/o group by, just replace the select with count(*).
    * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t1
    */
-  def rowCountSql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
+  def rowCountSql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
     sql(true, rep, setParams, ctx, escape)
   }
 
   private def sql(reqRowCount: Boolean,
                   rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                  setParams: Seq[SetParam],
+                  setParams: Seq[String],
                   context: Context,
                   escape: Escape) = {
 
@@ -51,15 +51,15 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     // SEARCH
     val search = ana.search.map { search =>
       val searchLit = StringLiteral(search, SoQLText)(NoPosition)
-      val ParametricSql(searchSql, searchSetParams) = searchLit.sql(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
+      val BQSql(searchSql, searchSetParams) = searchLit.sql(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
 
       PostgresUniverseCommon.searchVector(allColumnReps) match {
         case Some(sv) =>
           val andOrWhere = if (where.isDefined) " AND" else " WHERE"
           val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
-          ParametricSql(fts, searchSetParams)
+          BQSql(fts, searchSetParams)
         case None =>
-          ParametricSql("", setParamsWhere)
+          BQSql("", setParamsWhere)
       }
     }
     val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
@@ -67,7 +67,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     // GROUP BY
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
-      val ParametricSql(sql, newSetParams) = gb.sql(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
+      val BQSql(sql, newSetParams) = gb.sql(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
       (t2._1 :+ sql, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
@@ -79,7 +79,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     // ORDER BY
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
-        val ParametricSql(sql, newSetParams) =
+        val BQSql(sql, newSetParams) =
           ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
         (t2._1 :+ sql, newSetParams)
       }}
@@ -96,7 +96,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    ParametricSql(countBySubQuery(reqRowCount, completeSql), setParamsOrderBy)
+    BQSql(countBySubQuery(reqRowCount, completeSql), setParamsOrderBy)
   }
 
   private def countBySubQuery(reqRowCount: Boolean, sql: String) = {
@@ -116,12 +116,12 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   }
 
   private def select(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                     setParams: Seq[SetParam],
+                     setParams: Seq[String],
                      ctx: Context,
                      escape: Escape) = {
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
-      val ParametricSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
+      val BQSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
       val sqlGeomConverted = if (ctx.contains(LeaveGeomAsIs)) sql else toGeoText(sql, coreExpr.typ)
       (t2._1 :+ sqlGeomConverted, newSetParams)
     }

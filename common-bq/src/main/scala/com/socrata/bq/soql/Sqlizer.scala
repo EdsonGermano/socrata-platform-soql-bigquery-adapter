@@ -8,18 +8,18 @@ import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
-import com.socrata.bq.soql.Sqlizer.SetParam
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 
 
-case class ParametricSql(sql: String, setParams: Seq[SetParam])
+case class BQSql(sql: String, setParams: Seq[String])
 
 trait Sqlizer[T] {
 
   import Sqlizer._
   import SqlizerContext._
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape:
+  Escape): BQSql
 
   val underlying: T
 
@@ -62,8 +62,6 @@ trait Sqlizer[T] {
 object Sqlizer {
 
   type Context = Map[SqlizerContext, Any]
-
-  type SetParam = (Option[PreparedStatement], Int) => Option[Any]
 
   implicit def stringLiteralSqlizer(lit: StringLiteral[SoQLType]): Sqlizer[StringLiteral[SoQLType]] = {
     new StringLiteralSqlizer(lit)
@@ -113,6 +111,7 @@ object SqlizerContext extends Enumeration {
   val RootExpr = Value("root-expr")
   val CaseSensitivity = Value("case-sensitivity")
 }
+
 
 sealed trait CaseSensitivity
 
