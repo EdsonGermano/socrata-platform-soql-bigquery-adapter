@@ -19,7 +19,7 @@ trait RowReaderQuerier[CT, CV] {
             toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-             bqReps: Array[SoQLBigQueryReadRep[CT, CV]]):
+             bqReps: OrderedMap[ColumnId, SoQLBigQueryReadRep[CT, CV]]):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
 
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]

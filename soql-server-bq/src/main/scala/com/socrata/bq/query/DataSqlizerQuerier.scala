@@ -25,7 +25,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: Array[SoQLBigQueryReadRep[CT, CV]]) :
+               bqReps: OrderedMap[ColumnId, SoQLBigQueryReadRep[CT, CV]]) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
@@ -38,7 +38,11 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     val toSQLRep = toSql(analysis, "[nyc_taxi.ny_data]")
     logger.debug("to sql representation: " + toSQLRep)
 //    formulateQuery(analysis, querySchema)
-    val decoders = Array(Tuple2(new ColumnId(1), bqReps(0).toSoQL(_)))
+
+//    val decoders = Array(Tuple2(new ColumnId(1), bqReps(0).SoQL(_)))
+    val decoders = bqReps.map { case (cid, rep) =>
+      (cid, rep.SoQL(_))
+    }.toArray
 
     // get rows
     if (analysis.selection.size > 0) {
@@ -97,7 +101,9 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     override def next(): Row[CV] = {
       if (hasNext) {
-        toRow(it.next())
+        val rowVal = it.next()
+        logger.info("BQ row value: " + rowVal)
+        toRow(rowVal)
       } else {
         throw new Exception("No more data for the BigQueryResultSetIt")
       }
