@@ -63,6 +63,7 @@ object Sqlizer {
 
   type Context = Map[SqlizerContext, Any]
 
+
   implicit def stringLiteralSqlizer(lit: StringLiteral[SoQLType]): Sqlizer[StringLiteral[SoQLType]] = {
     new StringLiteralSqlizer(lit)
   }

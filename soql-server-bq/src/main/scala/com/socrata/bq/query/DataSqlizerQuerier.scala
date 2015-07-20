@@ -76,7 +76,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     row.freeze()
   }
 
-  class BigQueryResultIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[String]], toRow: (mutable.Buffer[String] => Row[CV]))
+  class BigQueryResultIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[String]], toRow: (mutable
+  .Buffer[String] => Row[CV]))
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
     private val it: Iterator[mutable.Buffer[String]] = rows.iterator

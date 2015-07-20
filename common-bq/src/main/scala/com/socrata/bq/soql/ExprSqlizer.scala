@@ -27,7 +27,7 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
   }
 
   private def quote(s: String, escape: Escape) = {
-    s"e'${escape(s)}'"
+    s"'${escape(s)}'"
   }
 
   private def toUpper(lit: String, ctx: Context): String = if (useUpper(ctx)) lit.toUpperCase else lit

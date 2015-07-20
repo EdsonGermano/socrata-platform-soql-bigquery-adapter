@@ -84,9 +84,9 @@ object SqlFunctions {
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
 
-    FloatingTimeStampTruncYmd -> formatCall("date_trunc('day', %s)") _,
-    FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
-    FloatingTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
+    FloatingTimeStampTruncYmd -> formatCall("day(timestamp(%s))") _,
+    FloatingTimeStampTruncYm -> formatCall("month(timestamp(%s))") _,
+    FloatingTimeStampTruncY -> formatCall("year(timestamp(%s))") _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
@@ -156,7 +156,6 @@ object SqlFunctions {
       val BQSql(sql, newSetParams) = param.sql(rep, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
-
     BQSql(sqlFragsAndParams._1.mkString(fnName + "(", ",", ")"), sqlFragsAndParams._2)
   }
 

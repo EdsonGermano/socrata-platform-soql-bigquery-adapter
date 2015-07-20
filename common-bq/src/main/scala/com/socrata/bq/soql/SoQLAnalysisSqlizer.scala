@@ -68,7 +68,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
       val BQSql(sql, newSetParams) = gb.sql(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
-      (t2._1 :+ sql, newSetParams)
+        val modifiedSQL = sql.replaceAll("[)(*]", "_")
+      (t2._1 :+ modifiedSQL, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
 
@@ -81,12 +82,14 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val BQSql(sql, newSetParams) =
           ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
-        (t2._1 :+ sql, newSetParams)
+        val modifiedSQL = sql.replaceAll("[)(*]", "_")
+        (t2._1 :+ modifiedSQL, newSetParams)
       }}
+
     val setParamsOrderBy = orderBy.map(_._2).getOrElse(setParamsHaving)
 
     // COMPLETE SQL
-    val completeSql = selectPhrase.mkString("SELECT ", ",", "") +
+    val completeSql = funcAlias(selectPhrase).mkString("SELECT ", ",", "") +
       s" FROM $tableName" +
       where.map(" WHERE " +  _.sql).getOrElse("") +
       search.map(_.sql).getOrElse("") +
@@ -125,6 +128,19 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       val sqlGeomConverted = if (ctx.contains(LeaveGeomAsIs)) sql else toGeoText(sql, coreExpr.typ)
       (t2._1 :+ sqlGeomConverted, newSetParams)
     }
+  }
+
+  /**
+   * Maps each function in the select statement so that it can be referenced outside of the SELECT clause
+   * statement if it is present there.
+   */
+  private def funcAlias(select: Seq[String]): Seq[String] = {
+    select.map(sql =>
+      if(sql.matches(".*/(.*/)].*")) { // then there's a function inside
+        s"$sql AS ${sql.replaceAll("[)(*]", "_")}"
+      } else {
+        sql
+      })
   }
 
   /**
