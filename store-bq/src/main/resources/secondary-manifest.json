@@ -1,4 +1,4 @@
 {
-    "class" : "com.socrata.pg.store.PGSecondary",
-    "name" : "pg"
+  "class" : "com.socrata.bq.store.BBQSecondary",
+  "name" : "bbq"
 }

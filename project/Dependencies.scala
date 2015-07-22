@@ -26,6 +26,9 @@ object Dependencies {
     val metricsJetty = "3.1.0"
     val metricsGraphite = "3.0.2"
     val metricsScala = "3.3.0"
+    val googleApiClient = "1.20.0"
+    val googleHttpClient = "1.20.0"
+    val googleBigqueryApi = "v2-rev217-1.20.0"
   }
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
@@ -38,14 +41,14 @@ object Dependencies {
 
   val commonsLang = "commons-lang" % "commons-lang" % versions.commonsLang
 
-  val googleApiClient = "com.google.api-client" % "google-api-client" % "1.20.0" excludeAll(
-    ExclusionRule(organization = "com.google.guava"),
-    ExclusionRule(organization = "commons-logging")
+  val googleApiClient = "com.google.api-client" % "google-api-client" % versions.googleApiClient excludeAll(
+      ExclusionRule(organization = "com.google.guava"),
+      ExclusionRule(organization = "commons-logging")
     )
 
-  val googleApi = "com.google.apis" % "google-api-services-bigquery" % "v2-rev217-1.20.0"
+  val googleBigqueryApi = "com.google.apis" % "google-api-services-bigquery" % versions.googleBigqueryApi
 
-  val googleHttpClient = "com.google.http-client" % "google-http-client-jackson2" % "1.20.0" exclude("commons-logging", "commons-logging")
+  val googleHttpClient = "com.google.http-client" % "google-http-client-jackson2" % versions.googleHttpClient exclude("commons-logging", "commons-logging")
 
   val jodaConvert = "org.joda" % "joda-convert" % versions.jodaConvert
 
