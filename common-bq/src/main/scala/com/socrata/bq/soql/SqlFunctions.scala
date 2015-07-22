@@ -22,6 +22,11 @@ object SqlFunctions {
 
   def apply(function: Function[SoQLType]) = funMap(function)
 
+  // distance conversion to see if the point is within the circle
+  private val CalculateDistanceCircle = "((ACOS(SIN(%s * PI() / 180) * SIN((%s.lat/1000) * PI() / 180) + " +
+    "COS(%s * PI() / 180) * COS((%s.lat/1000) * PI() / 180) * COS((%s - " +
+    "(%s.long/1000)) * PI() / 180)) * 180 / PI()) * 60 * 1.1515) < %s"
+
   private val funMap = Map[Function[SoQLType], FunCallToSql](
     IsNull -> formatCall("%s is null") _,
     IsNotNull -> formatCall("%s is not null") _,
@@ -35,11 +40,13 @@ object SqlFunctions {
     And -> infix("and") _,
     Or -> infix("or") _,
     NotBetween -> formatCall("not %s between %s and %s") _,
-    WithinCircle -> formatCall("ST_within(%s, ST_Buffer(ST_MakePoint(%s, %s)::geography, %s)::geometry)", Some(Seq(0, 2, 1, 3))) _,
+    // The rest of the parameters will be used in the SELECT statement
+    WithinCircle -> formatCall(CalculateDistanceCircle, Some(Seq(1, 0, 1, 0, 2, 0, 3))) _,
     WithinPolygon -> formatCall("ST_within(%s, %s)") _,
     // ST_MakeEnvelope(double precision xmin, double precision ymin, double precision xmax, double precision ymax, integer srid=unknown)
     // within_box(location_col_identifier, top_left_latitude, top_left_longitude, bottom_right_latitude, bottom_right_longitude)
-    WithinBox -> formatCall("ST_MakeEnvelope(%s, %s, %s, %s, 4326) ~ %s", Some(Seq(2, 3, 4, 1, 0))) _,
+    WithinBox -> formatCall("%s.lat > %s AND %s.lat < %s AND %s.long > %s AND %s.long < %s", Some(Seq(0, 1, 0, 3, 0,
+      2, 0, 4))) _,
     Extent -> formatCall("ST_Multi(ST_Extent(%s))") _,
     ConcaveHull -> formatCall("ST_Multi(ST_ConcaveHull(ST_Union(%s), %s))") _,
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
@@ -54,7 +61,7 @@ object SqlFunctions {
     TextToRowVersion -> decryptString(SoQLVersion) _,
     Like -> infix("like") _,
     NotLike -> infix("not like") _,
-    StartsWith -> infixSuffixWildcard("like") _,
+    StartsWith -> suffixWildCard("like") _,
     Contains -> infix("like") _,  // TODO - Need to add prefix % and suffix % to the 2nd operand.
     Concat -> infix("||") _,
 
@@ -131,18 +138,6 @@ object SqlFunctions {
   }
 
   private def passthrough: FunCallToSql = formatCall("%s")
-
-  private def infix(fnName: String)
-                   (fn: FunCall,
-                    rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                    setParams: Seq[String],
-                    ctx: Sqlizer.Context,
-                    escape: Escape): BQSql = {
-    val BQSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, ctx, escape)
-    val BQSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, ctx, escape)
-    val s = s"$l $fnName $r"
-    BQSql(s, setParamsLR)
-  }
 
   private def nary(fnName: String)
                   (fn: FunCall,
@@ -260,7 +255,19 @@ object SqlFunctions {
     BQSql(sqlFragsAndParams._1.mkString(","), sqlFragsAndParams._2)
   }
 
-  private def infixSuffixWildcard(fnName: String)
+  private def infix(fnName: String)
+                   (fn: FunCall,
+                    rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                    setParams: Seq[String],
+                    ctx: Sqlizer.Context,
+                    escape: Escape): BQSql = {
+    val BQSql(l, setParamsL) = fn.parameters.head.sql(rep, setParams, ctx, escape)
+    val BQSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, ctx, escape)
+    val s = s"$l $fnName $r"
+    BQSql(s, setParamsLR)
+  }
+
+  private def suffixWildCard(fnName: String)
                                  (fn: FunCall,
                                   rep: Map[UserColumnId,
                                   SqlColumnRep[SoQLType, SoQLValue]],
@@ -268,11 +275,10 @@ object SqlFunctions {
                                   ctx: Sqlizer.Context,
                                   escape: Escape): BQSql = {
 
-    val BQSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, ctx, escape)
-    val params = Seq(fn.parameters(1), Wildcard)
-    val suffixWildcard = FunctionCall(SuffixWildcard, params)(fn.position, fn.functionNamePosition)
-    val BQSql(r, setParamsLR) = suffixWildcard.sql(rep, setParamsL, ctx, escape)
+    val BQSql(l, setParamsL) = fn.parameters.head.sql(rep, setParams, ctx, escape)
+    val BQSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, ctx, escape)
     val s = s"$l $fnName $r"
+    // cannot get around inserting % into already quoted strings
     BQSql(s, setParamsLR)
   }
 }

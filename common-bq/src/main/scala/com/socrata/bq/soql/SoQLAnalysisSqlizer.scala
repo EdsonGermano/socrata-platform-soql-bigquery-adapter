@@ -48,6 +48,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val where = ana.where.map(_.sql(rep, setParamsSelect, ctx + (SoqlPart -> SoqlWhere), escape))
     val setParamsWhere = where.map(_.setParams).getOrElse(setParamsSelect)
 
+
+
     // SEARCH
     val search = ana.search.map { search =>
       val searchLit = StringLiteral(search, SoQLText)(NoPosition)
@@ -76,6 +78,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     // HAVING
     val having = ana.having.map(_.sql(rep, setParamsGroupBy, ctx + (SoqlPart -> SoqlHaving), escape))
     val setParamsHaving = having.map(_.setParams).getOrElse(setParamsGroupBy)
+
+    //
 
     // ORDER BY
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
@@ -114,7 +118,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    * level types of the final select list.
    */
   private def toGeoText(sql: String, typ: SoQLType): String = {
-    if (GeoTypes.contains(typ)) s"ST_AsBinary($sql)"
+    if (GeoTypes.contains(typ)) s"$sql"
     else sql
   }
 
