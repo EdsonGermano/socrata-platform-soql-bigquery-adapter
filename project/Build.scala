@@ -14,5 +14,5 @@ object Build extends sbt.Build {
 
   lazy val commonBQ = p("common-bq", CommonBQ)
   lazy val storeBQ = p("store-bq", StoreBQ) dependsOn(commonBQ % "test->test;compile->compile")
-  lazy val soqlServerBQ = p("soql-server-bq", SoqlServerBQ) dependsOn(storeBQ % "test->test;compile->compile")
+  lazy val soqlServerBQ = p("soql-server-bq", SoqlServerBQ) dependsOn(commonBQ % "test->test;compile->compile")
 }
