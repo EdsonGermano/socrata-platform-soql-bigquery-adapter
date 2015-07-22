@@ -38,59 +38,16 @@ class SqlizerTest extends FunSuite with Matchers {
   test("field in (x, y...) ci") {
     val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
     val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-    sql should be ("SELECT case_number FROM t1 WHERE (upper(case_number) in(?,?,?)) ORDER BY upper(case_number) LIMIT 2 OFFSET 1")
+    sql should be ("SELECT case_number FROM t1 WHERE (case_number in(?,?,?)) ORDER BY case_number LIMIT 2 OFFSET 1")
     setParams.length should be (3)
     setParams should be (Seq("'HA001'", "'HA002'", "'HA003'"))
   }
 
-  test("point/line/polygon") {
-    val soql = "select case_number, point, line, polygon"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT case_number,ST_AsBinary(point),ST_AsBinary(line),ST_AsBinary(polygon) FROM t1")
-    setParams.length should be (0)
-  }
-
   test("extent") {
-    val soql = "select extent(point), extent(multiline), extent(multipolygon)"
+    val soql = "select extent(point)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    println(s"SQL IS $sql")
-    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_Extent(point)))),ST_AsBinary((ST_Multi(ST_Extent(multiline)))),ST_AsBinary((ST_Multi(ST_Extent(multipolygon)))) FROM t1")
+    sql should be ("SELECT (MIN(point.lat), MIN(point.long), MAX(point.lat), MAX(point.long)) FROM t1")
     setParams.length should be (0)
-  }
-
-  test("concave hull") {
-    val soql = "select concave_hull(point, 0.99), concave_hull(multiline, 0.89), concave_hull(multipolygon, 0.79)"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(point), ?))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(multiline), ?))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(multipolygon), ?)))) FROM t1")
-    setParams.length should be (3)
-    setParams should be (Seq(0.99, 0.89, 0.79).map(BigDecimal(_)))
-  }
-
-  test("convex hull") {
-    val soql = "select convex_hull(point), convex_hull(multiline), convex_hull(multipolygon)"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(point)))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(multiline)))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(multipolygon))))) FROM t1")
-    setParams.length should be (0)
-  }
-
-  test("intersects") {
-    val soql = "select intersects(point, 'MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))')"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (ST_Intersects(point, (ST_GeomFromText(?, 4326)))) FROM t1")
-    setParams.length should be (1)
-    setParams should be (Seq("MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))"))
-  }
-
-  test("distance in meters") {
-    val soql = "select distance_in_meters(point, 'POINT(0 0)')"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (ST_Distance(point::geography, (ST_GeomFromText(?, 4326))::geography)) FROM t1")
-    setParams.length should be (1)
-    setParams should be (Seq("POINT(0 0)"))
   }
 
   test("expr and expr") {
@@ -185,7 +142,7 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams should be (Seq("'A'", "'X'", "'B'", "'Y'"))
   }
 
-  test("test bounding box") {
+  test("bounding box") {
     val soql = "select point where within_box(point, -60, 40, -90, 50)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
     setParams should be (Seq("60", "90", "40", "50"))

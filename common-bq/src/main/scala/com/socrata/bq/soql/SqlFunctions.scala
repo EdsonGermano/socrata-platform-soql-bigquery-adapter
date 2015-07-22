@@ -47,7 +47,7 @@ object SqlFunctions {
     // within_box(location_col_identifier, top_left_latitude, top_left_longitude, bottom_right_latitude, bottom_right_longitude)
     WithinBox -> formatCall("%s.lat > %s AND %s.lat < %s AND %s.long > %s AND %s.long < %s", Some(Seq(0, 1, 0, 3, 0,
       2, 0, 4))) _,
-    Extent -> formatCall("ST_Multi(ST_Extent(%s))") _,
+    Extent -> formatCall("MIN(%s.lat), MIN(%s.long), MAX(%s.lat), MAX(%s.long)", Some(Seq(0, 0, 0, 0))) _,
     ConcaveHull -> formatCall("ST_Multi(ST_ConcaveHull(ST_Union(%s), %s))") _,
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,

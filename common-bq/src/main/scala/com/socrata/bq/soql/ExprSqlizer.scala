@@ -103,6 +103,6 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
   }
 
   private def toUpper(phyColumn: String, ctx: Context): String =
-    if (expr.typ == SoQLText && useUpper(ctx) ) s"upper($phyColumn)"
+    if (expr.typ == SoQLText && useUpper(ctx) ) s"$phyColumn"
     else phyColumn
 }
