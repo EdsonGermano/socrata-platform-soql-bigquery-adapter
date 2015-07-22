@@ -5,17 +5,15 @@ import java.sql.{Connection, DriverManager, ResultSet}
 
 import com.rojoma.simplearm.util._
 import com.rojoma.simplearm.Managed
-import com.socrata.soql.types.{SoQLValue, SoQLType}
+import com.rojoma.json.v3.util.JsonUtil
+import com.socrata.soql.types._
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
+import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
-import com.socrata.datacoordinator.id.{DatasetId, CopyId}
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage,
-                                                   ColumnInfo, DatasetCopyContext}
-import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
-import com.socrata.datacoordinator.truth.universe.sql.{PostgresCopyIn, C3P0WrappedPostgresCopyIn}
+import com.socrata.datacoordinator.id.{DatasetId, CopyId, ColumnId, UserColumnId}
+import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
 import com.socrata.thirdparty.typesafeconfig.C3P0Propertizer
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.slf4j.Logging
@@ -24,6 +22,7 @@ import org.postgresql.ds.PGSimpleDataSource
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.client.http.ByteArrayContent
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
@@ -33,9 +32,17 @@ import com.google.api.services.bigquery.model._
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
   private val PROJECT_ID = "numeric-zoo-99418"
   private val PROJECT_NUMBER = "1093450707280"
+  private val BQ_DATASET_ID = "test_set"
   private val COPY_INFO_TABLE = "bbq_copy_info"
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
+
+  // private val staticTestingSchema = new TableSchema().setFields(List(new TableFieldSchema().setName("foo").setType("FLOAT"),
+  //                                                                    new TableFieldSchema().setName("bar").setType("STRING")))
+  // private val staticTestingJsonContent = """
+  //         |{"foo":1234.56, "bar":"baz"}
+  //         |{"foo":0, "bar":"quux"}
+  //         """.stripMargin.trim
 
   val bigquery = {
     var credential: GoogleCredential = GoogleCredential.getApplicationDefault()
@@ -44,6 +51,8 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     }
     new Bigquery.Builder(TRANSPORT, JSON_FACTORY, credential).setApplicationName("BBQ Secondary").build()
   }
+
+  val handler = new BigqueryHandler(bigquery, PROJECT_ID, BQ_DATASET_ID)
 
   // called on graceful shutdown
   override def shutdown(): Unit = {
@@ -63,15 +72,10 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def currentCopyNumber(datasetInternalName: String, cookie: Cookie): Long = {
     val datasetId = parseDatasetId(datasetInternalName)
-    val res = getCopyNumber(datasetId)
-    logger.info(s"$res")
-    res
+    getCopyNumber(datasetId)
   }
 
-  override def wantsWorkingCopies: Boolean = {
-    logger.info("wantsWorkingCopies accessed")
-    false
-  }
+  override def wantsWorkingCopies: Boolean = false
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
     val datasetId = parseDatasetId(datasetInternalName)
@@ -84,11 +88,14 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       cookie: Secondary.Cookie,
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
-    logger.info(s"resync ${datasetInfo.internalName}@${copyInfo.systemId.underlying}/${copyInfo.dataVersion}/${copyInfo.copyNumber}")
+    logger.info(s"resyncing ${datasetInfo.internalName}@${copyInfo.systemId.underlying}/${copyInfo.dataVersion}/${copyInfo.copyNumber}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
     setCopyInfoEntry(datasetId, copyInfo)
+    handler.handleResync(datasetInfo, copyInfo, schema, rows)
     cookie
   }
+
+
 
   override def version(datasetInfo: DatasetInfo,
               dataVersion: Long,
@@ -114,25 +121,33 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     datasetInternalName.split('.')(1).toInt
   }
 
-  private def getCopyInfoEntry(datasetId: Int): (Int, Int) = {
-    var result = (0, 0)
+  private def getCopyNumber(datasetId: Int): Int = {
     for (conn <- managed(getConnection())) {
-      val query = "SELECT copy_number, data_version FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
+      val query = "SELECT copy_number FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
       val stmt = conn.createStatement()
       val resultSet = stmt.executeQuery(query)
       if (resultSet.first()) {
         // result set has a row
         val copyNumber = resultSet.getInt("copy_number")
-        val dataVersion = resultSet.getInt("data_version")
-        result = (copyNumber, dataVersion)
+        return copyNumber
       }
     }
-    result
+    0
   }
 
-  private def getCopyNumber(datasetId: Int) = getCopyInfoEntry(datasetId)._1
-
-  private def getDataVersion(datasetId: Int) = getCopyInfoEntry(datasetId)._2
+  private def getDataVersion(datasetId: Int): Int = {
+    for (conn <- managed(getConnection())) {
+      val query = "SELECT data_version FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
+      val stmt = conn.createStatement()
+      val resultSet = stmt.executeQuery(query)
+      if (resultSet.first()) {
+        // result set has a row
+        val dataVersion = resultSet.getInt("data_version")
+        return dataVersion
+      }
+    }
+    0
+  }
 
   private def setCopyInfoEntry(datasetId: Int, copyInfo: SecondaryCopyInfo) = {
     for (conn <- managed(getConnection())) {
