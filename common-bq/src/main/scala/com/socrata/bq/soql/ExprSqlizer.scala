@@ -13,24 +13,27 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
   val underlying = lit
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
-
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        val v = toUpper(quote(lit.value, escape), ctx)
+        val v = toUpper(quote(lit.value, escape, ctx), ctx)
         BQSql(v, setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(ctx) =>
-        val v = toUpper(quote(lit.value, escape), ctx)
+        val v = toUpper(quote(lit.value, escape, ctx), ctx)
         BQSql(v, setParams)
       case _ =>
-        BQSql(ParamPlaceHolder, setParams :+ toUpper(quote(lit.value, escape), ctx))
+        BQSql(ParamPlaceHolder, setParams :+ toUpper(quote(lit.value, escape, ctx), ctx))
     }
   }
 
-  private def quote(s: String, escape: Escape) = {
-    s"'${escape(s)}'"
+  private def quote(s: String, escape: Escape, ctx: Context) = {
+    ctx.get(Extras) match {
+      case Some(BeginsWith) => s"'${escape(s)}%'"
+      case _ => s"'${escape(s)}'"
+    }
   }
 
   private def toUpper(lit: String, ctx: Context): String = if (useUpper(ctx)) lit.toUpperCase else lit
+
 }
 
 class NumberLiteralSqlizer(lit: NumberLiteral[SoQLType]) extends Sqlizer[NumberLiteral[SoQLType]] {
@@ -103,6 +106,6 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
   }
 
   private def toUpper(phyColumn: String, ctx: Context): String =
-    if (expr.typ == SoQLText && useUpper(ctx) ) s"$phyColumn"
+    if (expr.typ == SoQLText && useUpper(ctx) ) s"upper($phyColumn)"
     else phyColumn
 }

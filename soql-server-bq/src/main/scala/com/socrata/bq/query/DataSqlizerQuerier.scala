@@ -21,6 +21,9 @@ import scala.collection.mutable
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
+  val PROJECT_NAME = "bbq_test" // "thematic-bee-98521"
+  var TABLE_NAME = "[test_set_2]" // "[ids.nyc]"
+
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
@@ -36,7 +39,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //    val decoders2 = querySchema.map { case (cid, rep) =>
 //      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
 //    }.toArray
-    val bQSql = toSql(analysis, "[ids.nyc]")
+    val bQSql = toSql(analysis, TABLE_NAME)
 
     logger.debug(s"RAW QUERY $bQSql")
 
@@ -53,7 +56,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     // get rows
     if (analysis.selection.size > 0) {
-      val bqResult = BigQueryQuerier.query("thematic-bee-98521", queryStr)
+      val bqResult = BigQueryQuerier.query(PROJECT_NAME, queryStr)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
 
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))

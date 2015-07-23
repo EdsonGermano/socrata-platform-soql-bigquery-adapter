@@ -36,11 +36,24 @@ class SqlizerTest extends FunSuite with Matchers {
   }
 
   test("field in (x, y...) ci") {
-    val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
+    val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number limit 2"
     val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-    sql should be ("SELECT case_number FROM t1 WHERE (case_number in(?,?,?)) ORDER BY case_number LIMIT 2 OFFSET 1")
+    sql should be ("SELECT case_number FROM t1 WHERE (upper(case_number) in(?,?,?)) ORDER BY case_number LIMIT 2")
     setParams.length should be (3)
     setParams should be (Seq("'HA001'", "'HA002'", "'HA003'"))
+  }
+
+  test("as implicit alias order by") {
+    val soql = "select sum(id) order by sum(id) limit 2"
+    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
+    sql should be ("SELECT (sum(id)) AS _sum_id__ FROM t1 ORDER BY _sum_id__ LIMIT 2")
+    setParams.length should be (0)
+  }
+
+  test("as implicit alias no forward alias reference") {
+    val soql = "select sum(id) group by id limit 2"
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (sum(id)) AS _sum_id__ FROM t1 GROUP BY id LIMIT 2")
   }
 
   test("extent") {
@@ -69,17 +82,25 @@ class SqlizerTest extends FunSuite with Matchers {
   test("starts_with has automatic suffix %") {
     val soql = "select id where starts_with(case_number, 'cn')"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT id FROM t1 WHERE (case_number like (? || ?))")
-    setParams.length should be (2)
-    setParams should be (Seq("cn", "%"))
+    sql should be ("SELECT id FROM t1 WHERE (case_number like ?)")
+    setParams.length should be (1)
+    setParams should be (Seq("'cn%'"))
   }
 
   test("starts_with has automatic suffix % ci") {
     val soql = "select id where starts_with(case_number, 'cn')"
     val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-    sql should be ("SELECT id FROM t1 WHERE (upper(case_number) like (? || ?))")
-    setParams.length should be (2)
-    setParams should be (Seq("CN", "%"))
+    sql should be ("SELECT id FROM t1 WHERE (upper(case_number) like ?)")
+    setParams.length should be (1)
+    setParams should be (Seq("'CN%'"))
+  }
+
+  test("explicit like") {
+    val soql = "select case_number where case_number like '%10%'"
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT case_number FROM t1 WHERE (case_number like ?)")
+    setParams should be (Seq("'%10%'"))
+    setParams.length should be (1)
   }
 
   test("between") {
@@ -93,53 +114,16 @@ class SqlizerTest extends FunSuite with Matchers {
   test("select count(*)") {
     val soql = "select count(*)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(*)) FROM t1")
+    sql should be ("SELECT (count(*)) AS _count____ FROM t1")
     setParams.length should be (0)
   }
 
   test("select aggregate functions") {
     val soql = "select count(id), avg(id), min(id), max(id), sum(id)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(id)),(avg(id)),(min(id)),(max(id)),(sum(id)) FROM t1")
+    sql should be ("SELECT (count(id)) AS _count_id__,(avg(id)) AS _avg_id__,(min(id)) AS _min_id__,(max(id)) AS " +
+      "_max_id__,(sum(id)) AS _sum_id__ FROM t1")
     setParams.length should be (0)
-  }
-
-  test("select text and number conversions") {
-    val soql = "select 123::text, '123'::number"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (?::varchar),(?::numeric) FROM t1")
-    setParams.length should be (2)
-    setParams should be (Seq("123", "'123'"))
-  }
-
-  test("search") {
-    val soql = "select id search 'oNe Two'"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT id FROM t1 WHERE to_tsvector('english', coalesce(array_12,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_11,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery('english', ?)")
-    setParams.length should be (1)
-    setParams should be (Seq("'oNe Two'"))
-  }
-
-  test("signed magnitude 10") {
-    val soql = "select signed_magnitude_10(year)"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (sign(year) * length(floor(abs(year))::text)) FROM t1")
-    setParams.length should be (0)
-  }
-
-  test("signed magnitude linear") {
-    val soql = "select signed_magnitude_linear(year, 42)"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be("SELECT (sign(year) * floor(abs(year)/? + 1)) FROM t1")
-    setParams.length should be(1)
-    setParams should be(Seq("42"))
-  }
-
-  test("case fn") {
-    val soql = "select case(primary_type = 'A', 'X', primary_type = 'B', 'Y')"
-    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (case WHEN (primary_type = ?) THEN ? WHEN (primary_type = ?) THEN ? end) FROM t1")
-    setParams should be (Seq("'A'", "'X'", "'B'", "'Y'"))
   }
 
   test("bounding box") {

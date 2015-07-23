@@ -1,5 +1,6 @@
 package com.socrata.bq.soql
 
+
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.bq.store.PostgresUniverseCommon
@@ -68,7 +69,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
       val BQSql(sql, newSetParams) = gb.sql(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
-        val modifiedSQL = sql.replaceAll("[)(*]", "_")
+        val modifiedSQL = sql.replaceAll("[)(*]", "_") // to reference possible aliases in the SELECT stmt
       (t2._1 :+ modifiedSQL, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
@@ -82,7 +83,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val BQSql(sql, newSetParams) =
           ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
-        val modifiedSQL = sql.replaceAll("[)(*]", "_")
+        val modifiedSQL = sql.replaceAll("[)(*]", "_") // to reference possible aliases in the SELECT stmt
         (t2._1 :+ modifiedSQL, newSetParams)
       }}
 
@@ -107,17 +108,6 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     else sql
   }
 
-  private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiPoint, SoQLLine, SoQLMultiLine, SoQLPolygon, SoQLMultiPolygon)
-  /**
-   * When we pull data out of pg we only want to translate it when we pull it out for performance reasons,
-   * in particular if we are doing aggregations on geo types in the SQL query, so we do so against the top
-   * level types of the final select list.
-   */
-  private def toGeoText(sql: String, typ: SoQLType): String = {
-    if (GeoTypes.contains(typ)) s"$sql"
-    else sql
-  }
-
   private def select(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                      setParams: Seq[String],
                      ctx: Context,
@@ -125,8 +115,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val BQSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
-      val sqlGeomConverted = if (ctx.contains(LeaveGeomAsIs)) sql else toGeoText(sql, coreExpr.typ)
-      (t2._1 :+ sqlGeomConverted, newSetParams)
+      val timeStampConv = if (coreExpr.typ.toString.contains("timestamp")) s"TIMESTAMP_TO_USEC($sql)" else sql
+      (t2._1 :+ timeStampConv, newSetParams)
     }
   }
 
@@ -136,7 +126,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    */
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.map(sql =>
-      if(sql.matches(".*/(.*/)].*")) { // then there's a function inside
+      if(sql.matches("\\((sum|avg|count|min|max)\\(.*\\)\\)")) {
         s"$sql AS ${sql.replaceAll("[)(*]", "_")}"
       } else {
         sql

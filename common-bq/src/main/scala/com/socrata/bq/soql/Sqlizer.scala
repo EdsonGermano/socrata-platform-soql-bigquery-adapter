@@ -1,13 +1,10 @@
 package com.socrata.bq.soql
 
-import java.sql.PreparedStatement
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
-import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
-import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 
 
@@ -26,12 +23,16 @@ trait Sqlizer[T] {
   protected def useUpper(ctx: Context): Boolean = {
     if (caseInsensitive(ctx))
       ctx(SoqlPart) match {
-        case SoqlWhere | SoqlGroup | SoqlOrder | SoqlHaving => true
+        case SoqlWhere | SoqlGroup | SoqlHaving => true
         case SoqlSelect => usedInGroupBy(ctx)
         case SoqlSearch => false
         case _ => false
       }
     else false
+  }
+
+  protected def appendWildCard(ctx: Context) : Boolean = {
+    false
   }
 
   protected def usedInGroupBy(ctx: Context): Boolean = {
@@ -104,9 +105,9 @@ object SqlizerContext extends Enumeration {
   val SoqlHaving = Value("having")
   val SoqlOrder = Value("order")
   val SoqlSearch = Value("search")
-  // Normally geometry is converted to text when used in select.
-  // But if the sql is used for table insert like rollup, we do not want geometry converted to text.
-  val LeaveGeomAsIs = Value("leave-geom-as-is")
+  val Extras = Value("extras")
+  // Need to append % after the string
+  val BeginsWith = Value("begins-with")
   val IdRep = Value("id-rep")
   val VerRep = Value("ver-rep")
   val RootExpr = Value("root-expr")

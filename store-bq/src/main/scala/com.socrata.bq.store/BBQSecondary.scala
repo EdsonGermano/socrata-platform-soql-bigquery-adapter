@@ -32,7 +32,7 @@ import com.google.api.services.bigquery.model._
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
   private val PROJECT_ID = "numeric-zoo-99418"
   private val PROJECT_NUMBER = "1093450707280"
-  private val BQ_DATASET_ID = "test_set"
+  private val BQ_DATASET_ID = "test_set_2"
   private val COPY_INFO_TABLE = "bbq_copy_info"
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
@@ -75,7 +75,10 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     getCopyNumber(datasetId)
   }
 
-  override def wantsWorkingCopies: Boolean = false
+  override def wantsWorkingCopies: Boolean = {
+    println("wantsWorkingCopies called")
+    false
+  }
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
     val datasetId = parseDatasetId(datasetInternalName)

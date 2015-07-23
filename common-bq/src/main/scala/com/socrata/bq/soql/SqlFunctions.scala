@@ -276,7 +276,7 @@ object SqlFunctions {
                                   escape: Escape): BQSql = {
 
     val BQSql(l, setParamsL) = fn.parameters.head.sql(rep, setParams, ctx, escape)
-    val BQSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, ctx, escape)
+    val BQSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, ctx + (SqlizerContext.Extras -> SqlizerContext.BeginsWith), escape)
     val s = s"$l $fnName $r"
     // cannot get around inserting % into already quoted strings
     BQSql(s, setParamsLR)
