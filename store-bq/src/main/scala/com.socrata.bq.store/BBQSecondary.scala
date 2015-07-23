@@ -3,6 +3,7 @@ package com.socrata.bq.store
 import collection.JavaConversions._
 import java.sql.{Connection, DriverManager, ResultSet}
 
+import com.rojoma.json.v3.ast._
 import com.rojoma.simplearm.util._
 import com.rojoma.simplearm.Managed
 import com.rojoma.json.v3.util.JsonUtil
@@ -82,8 +83,46 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
     logger.info(s"resyncing ${datasetInfo.internalName}@${copyInfo.systemId.underlying}/${copyInfo.dataVersion}/${copyInfo.copyNumber}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
+    // construct ref to table
+    val columnNames: ColumnIdMap[String] = handler.makeColumnNameMap(schema)
+    val ref = handler.makeTableReference(datasetInfo, copyInfo)
+    val userSchema = schema.filter( (id, info) => handler.isUserColumn(info.id) )
+    val bqSchema = handler.makeTableSchema(userSchema, columnNames)
+    val table = new Table()
+            .setTableReference(ref)
+            .setSchema(bqSchema)
+
+    try {
+      bigquery.tables.insert(PROJECT_ID, BQ_DATASET_ID, table).execute()
+    } catch {
+      case e: GoogleJsonResponseException => {
+        if (e.getDetails.getCode == 409) {
+          // the table already exists
+          // what should be done here?
+        } else {
+          throw e
+        }
+      }
+    }
+    for { iter <- rows } {
+      val requests = 
+        for {
+          row: ColumnIdMap[SoQLValue] <- iter
+        } yield {
+          val rowMap = row.foldLeft(Map[String, JValue]()) { case (map, (id, value)) =>
+            columnNames.get(id) match {
+              case None => map
+              case Some(name) => map + ((name, handler.encode(value)))
+            }
+          }
+          JsonUtil.renderJson(rowMap)
+        }
+
+      for { batch <- requests.grouped(10000) } {
+        handler.loadRows(ref, batch)
+      }
+    }
     setCopyInfoEntry(datasetId, copyInfo)
-    handler.handleResync(datasetInfo, copyInfo, schema, rows)
     cookie
   }
 
