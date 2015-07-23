@@ -1,11 +1,14 @@
 package com.socrata.bq.soql.bqreps
 
-import com.socrata.bq.soql.{SoQLBigQueryWriteRep, SoQLBigQueryReadRep}
+import com.rojoma.json.v3.ast.{JBoolean, JValue, JNull}
+import com.socrata.bq.soql.{BigQueryWriteRep, BigQueryReadRep}
 import com.socrata.soql.types.{SoQLNull, SoQLBoolean, SoQLType, SoQLValue}
 
-class BooleanRep extends SoQLBigQueryReadRep[SoQLType, SoQLValue] with SoQLBigQueryWriteRep[SoQLType, SoQLValue] {
+class BooleanRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLBoolean
+
+  override val bigqueryType: String = "BOOLEAN"
 
   override def SoQL(value: String): SoQLValue = {
     if (value == null) SoQLNull
@@ -13,5 +16,8 @@ class BooleanRep extends SoQLBigQueryReadRep[SoQLType, SoQLValue] with SoQLBigQu
     else SoQLBoolean(false)
   }
 
-  override def BigQueryType(soqlType: SoQLType): String = "BOOLEAN"
+  override def jvalue(value: SoQLValue): JValue = {
+    if (value == SoQLNull) JNull
+    else JBoolean(value.asInstanceOf[SoQLBoolean].value)
+  }
 }

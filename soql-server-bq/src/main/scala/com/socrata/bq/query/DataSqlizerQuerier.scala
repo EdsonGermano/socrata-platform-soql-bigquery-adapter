@@ -6,7 +6,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.{Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.bq.soql.{SoQLBigQueryReadRep, BigQueryRepFactory, ParametricSql}
+import com.socrata.bq.soql.{BigQueryReadRep, BigQueryRepFactory, ParametricSql}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types.{SoQLText, SoQLValue}
@@ -24,7 +24,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: OrderedMap[ColumnId, SoQLBigQueryReadRep[CT, CV]]) :
+               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]]) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
@@ -47,8 +47,15 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //      new ResultSetIt(rowCount, rs, decodeBigQueryRow(decoders))
 
 //      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select TIMESTAMP_TO_USEC(pickup_datetime) from [wilbur.nyc] limit 10")
-      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select field2 from [wilbur.test] limit 10")
+//      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select field2 from [wilbur.test] limit 10")
 
+      // Eventually this should work
+//      val sql = toSql(analysis, dataTableName).sql
+
+      val sql = "select vendor_id, TIMESTAMP_TO_USEC(pickup_datetime), passenger_count from [wilbur.nyc] limit 10"
+      val bqResult = BigQueryQuerier.query("socrata-annasapek", sql)
+
+      logger.debug("Executing SQL: " + sql)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
 
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
