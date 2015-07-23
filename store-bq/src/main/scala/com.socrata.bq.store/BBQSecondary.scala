@@ -30,19 +30,11 @@ import com.google.api.services.bigquery.model._
 
 // scalastyle:off
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
-  private val PROJECT_ID = "numeric-zoo-99418"
-  private val PROJECT_NUMBER = "1093450707280"
-  private val BQ_DATASET_ID = "test_set"
+  private val PROJECT_ID = config.getString("project-id")
+  private val BQ_DATASET_ID = config.getString("dataset-id")
   private val COPY_INFO_TABLE = "bbq_copy_info"
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
-
-  // private val staticTestingSchema = new TableSchema().setFields(List(new TableFieldSchema().setName("foo").setType("FLOAT"),
-  //                                                                    new TableFieldSchema().setName("bar").setType("STRING")))
-  // private val staticTestingJsonContent = """
-  //         |{"foo":1234.56, "bar":"baz"}
-  //         |{"foo":0, "bar":"quux"}
-  //         """.stripMargin.trim
 
   val bigquery = {
     var credential: GoogleCredential = GoogleCredential.getApplicationDefault()
