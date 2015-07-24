@@ -1,5 +1,7 @@
 package com.socrata.bq.store
 
+import com.socrata.bq.soql.BigQueryRepFactory
+
 import collection.JavaConversions._
 import java.sql.{Connection, DriverManager, ResultSet}
 
@@ -112,7 +114,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
           val rowMap = row.foldLeft(Map[String, JValue]()) { case (map, (id, value)) =>
             columnNames.get(id) match {
               case None => map
-              case Some(name) => map + ((name, handler.encode(value)))
+              case Some(name) => map + ((name, BigQueryRepFactory(value.typ).jvalue(value)))
             }
           }
           JsonUtil.renderJson(rowMap)

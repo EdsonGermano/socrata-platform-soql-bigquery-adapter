@@ -5,7 +5,7 @@ import com.socrata.soql.types._
 
 object BigQueryRepFactory {
 
-  private val RepFactory = Map[SoQLType, BigQueryReadRep[SoQLType, SoQLValue]](
+  private val RepFactory = Map[SoQLType, BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue]](
     SoQLText -> new TextRep,
     SoQLNumber -> new NumberRep,
     SoQLFixedTimestamp -> new FixedTimestampRep,
@@ -14,7 +14,7 @@ object BigQueryRepFactory {
     SoQLBoolean -> new BooleanRep
   )
 
-  def bqRep(givenType : SoQLType) : BigQueryReadRep[SoQLType, SoQLValue] = {
+  def apply(givenType : SoQLType) : BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] = {
     RepFactory(givenType)
   }
 }
