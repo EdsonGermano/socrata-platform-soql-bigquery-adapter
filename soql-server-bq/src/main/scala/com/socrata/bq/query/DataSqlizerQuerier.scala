@@ -55,15 +55,19 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }.toArray
 
     // get rows
+    logger.debug("right before analysis selection")
     if (analysis.selection.size > 0) {
+      logger.debug("right before bigquery query method")
       val bqResult = BigQueryQuerier.query(PROJECT_NAME, queryStr)
-      logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
-
-      new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
-    } else {
-      logger.debug("Queried a dataset with no user columns")
-      EmptyIt
+      logger.debug("right after query method")
+      if (bqResult != null) {
+        logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
+        new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
+      } else {
+        logger.debug("Queried a dataset with no user columns")
+      }
     }
+    EmptyIt
   }
 
   def decodeBigQueryRow(decoders: Array[(ColumnId, String => CV)])
