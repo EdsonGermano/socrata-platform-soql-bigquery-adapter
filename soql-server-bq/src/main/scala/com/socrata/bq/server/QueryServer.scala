@@ -236,7 +236,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         // associated with each column. This should eventually replace the "qryReps" parametere
         // to querier.query, but for now add it as an additional parameter "bqReps"
         val repFactory = BigQueryRepFactory
-        val bqReps = qrySchema.mapValues(v => repFactory.bqRep(v.typ))
+        val bqReps = qrySchema.mapValues(v => repFactory(v.typ))
 
         // Print the schema for this query
         logger.info("Query schema: ")

@@ -19,7 +19,8 @@ object BuildSettings {
     (if(assembly) Seq(mergeStrategy in AssemblyKeys.assembly ~= mergeStrategies _) else Seq()) ++
     Seq(
       libraryDependencies ++= Seq(
-        Dependencies.scalaTest % "test"
+        Dependencies.scalaTest % "test",
+        Dependencies.scalaCheck % "test"
       )
     )
 

@@ -17,4 +17,3 @@
 /.idea/
 /.idea_modules/
 */docker/*.jar
-soql-bigquery-adapter.*
