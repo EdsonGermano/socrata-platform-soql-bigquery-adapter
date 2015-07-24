@@ -30,26 +30,41 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
-               querier: Querier) :
+               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]]) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
-    val (datasetContext, dataTableName) = toRowCountSql(datasetContext, dataTableName)
-    val bQSql = toSql(analysis, dataTableName)
+
+    // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
+    // every time, which is very expensive.  Move that out of the inner loop of decodeRow.
+    // Also, the orderedMap is extremely inefficient and very complex to debug.
+    // TODO: refactor PG server not to use Ordered Map.
+//    val decoders2 = querySchema.map { case (cid, rep) =>
+//      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
+//    }.toArray
+    val bQSql = toSql(analysis, TABLE_NAME)
+
     logger.debug(s"RAW QUERY $bQSql")
+
     val params = bQSql.setParams.toIterator
     val queryStr = bQSql.sql.toList.map(e => e.toString).map(s => if (s.equals("?")) params.next else s).mkString
+
     logger.debug(s"QUERY: $queryStr")
 
     val decoders = bqReps.map { case (cid, rep) =>
       (cid, rep.SoQL(_))
     }.toArray
 
+    // get rows
+    logger.debug("right before analysis selection")
     if (analysis.selection.size > 0) {
-      val bqResult = querier.query(PROJECT_NAME, queryStr)
-      logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
-      new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
-    } else {
-      logger.debug("No columns selected!")
+      logger.debug("right before bigquery query method")
+      val bqResult = BigQueryQuerier.query(PROJECT_NAME, queryStr)
+      logger.debug("right after query method")
+      if (bqResult != null) {
+        logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
+        new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
+      } else {
+        logger.debug("Queried a dataset with no user columns")
+      }
     }
     EmptyIt
   }
