@@ -1,14 +1,16 @@
 package com.socrata.bq.query
 
+import com.mchange.v2.c3p0.impl.NewProxyPreparedStatement
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.datacoordinator.{Row, MutableRow}
+import com.socrata.datacoordinator.{id, Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.bq.soql.{BigQueryReadRep, BigQueryRepFactory, ParametricSql}
+import com.socrata.bq.soql.{Escape, BigQueryReadRep, BigQueryRepFactory, BQSql}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.typed.ColumnRef
 import com.socrata.soql.types.{SoQLText, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
@@ -19,9 +21,13 @@ import scala.collection.mutable
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
+  // This should not be hard-coded
+  val PROJECT_NAME = "thematic-bee-98521"
+  var TABLE_NAME = "[ids.nyc]"
+
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
-               toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
-               toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
+               toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
+               toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
                bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]]) :
@@ -34,28 +40,22 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 //    val decoders2 = querySchema.map { case (cid, rep) =>
 //      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
 //    }.toArray
+    val bQSql = toSql(analysis, TABLE_NAME)
 
-//    val decoders = Array(Tuple2(new ColumnId(1), bqReps(0).SoQL(_)))
+    logger.debug(s"RAW QUERY $bQSql")
+
+    val params = bQSql.setParams.toIterator
+    val queryStr = bQSql.sql.toList.map(e => e.toString).map(s => if (s.equals("?")) params.next else s).mkString
+
+    logger.debug(s"QUERY: $queryStr")
+
     val decoders = bqReps.map { case (cid, rep) =>
       (cid, rep.SoQL(_))
     }.toArray
 
     // get rows
     if (analysis.selection.size > 0) {
-//      val rs = executeSql(conn, toSql(analysis, dataTableName))
-//      Statement and resultset are closed by the iterator.
-//      new ResultSetIt(rowCount, rs, decodeBigQueryRow(decoders))
-
-//      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select TIMESTAMP_TO_USEC(pickup_datetime) from [wilbur.nyc] limit 10")
-//      val bqResult = BigQueryQuerier.query("socrata-annasapek", "select field2 from [wilbur.test] limit 10")
-
-      // Eventually this should work
-//      val sql = toSql(analysis, dataTableName).sql
-
-      val sql = "select vendor_id, TIMESTAMP_TO_USEC(pickup_datetime), passenger_count from [wilbur.nyc] limit 10"
-      val bqResult = BigQueryQuerier.query("socrata-annasapek", sql)
-
-      logger.debug("Executing SQL: " + sql)
+      val bqResult = BigQueryQuerier.query(PROJECT_NAME, queryStr)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
 
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
@@ -78,7 +78,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     row.freeze()
   }
 
-  class BigQueryResultIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[String]], toRow: (mutable.Buffer[String] => Row[CV]))
+  class BigQueryResultIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[String]], toRow: (mutable
+  .Buffer[String] => Row[CV]))
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
     private val it: Iterator[mutable.Buffer[String]] = rows.iterator

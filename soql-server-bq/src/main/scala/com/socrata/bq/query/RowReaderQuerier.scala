@@ -6,7 +6,8 @@ import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.bq.soql.{BigQueryReadRep, ParametricSql}
+
+import com.socrata.bq.soql.{BigQueryReadRep, BQSql}
 import com.socrata.bq.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
@@ -15,8 +16,8 @@ trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] =>
 
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
-            toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql,
-            toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
+            toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql,
+            toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
              bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]]):

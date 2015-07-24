@@ -17,4 +17,6 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val metrics = MetricsOptions(config.getConfig(path("metrics")))
   val instance = getString("instance")
   val threadpool = getRawConfig("threadpool")
+  val bigqueryProjectId = getRawConfig("bigquery").getString("project-id")
+  val bigqueryDatasetId = getRawConfig("bigquery").getString("dataset-id")
 }
