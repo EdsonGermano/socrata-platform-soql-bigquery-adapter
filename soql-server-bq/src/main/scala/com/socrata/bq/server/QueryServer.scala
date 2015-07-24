@@ -71,7 +71,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     import SimpleRouteContext._
     Routes(
       Route("/schema", SchemaResource),
-      Route("/rollups", RollupResource),
       Route("/query", QueryResource),
       Route("/version", VersionResource)
     )
@@ -113,22 +112,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
-  object RollupResource extends SimpleResource {
-    override val get = rollups _
-  }
-
-  def rollups(req: HttpRequest): HttpResponse = {
-    val servReq = req.servletRequest
-    val ds = servReq.getParameter("ds")
-    val copy = Option(servReq.getParameter("copy"))
-    val includeUnmaterialized = java.lang.Boolean.parseBoolean(servReq.getParameter("include_unmaterialized"))
-    getRollups(ds, copy, includeUnmaterialized) match {
-      case Some(rollups) =>
-        OK ~> Write(JsonContentType)(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
-      case None =>
-        NotFound
-    }
-  }
 
   object QueryResource extends SimpleResource {
     override val get = query _
@@ -146,14 +129,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val datasetId = servReq.getParameter("dataset")
     val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
-    val schemaHash = servReq.getParameter("schemaHash")
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
-    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
-
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, req.precondition, req.dateTimeHeader("If-Modified-Since"))
+    streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -166,7 +146,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     datasetId:String,
     reqRowCount: Boolean,
     copy: Option[String],
-    rollupName: Option[RollupName],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
@@ -176,15 +155,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
           pgu.datasetMapReader.datasetInfo(dsId) match {
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
-
-              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, rollupName, precondition, ifModifiedSince) match {
+              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
                 case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
                   ETag(etag)(resp)
                   copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
-                  rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
                   for (r <- results) yield {
                     CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
                   }
@@ -209,7 +186,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     rowCount: Boolean,
     reqCopy: Option[String],
-    rollupName: Option[RollupName],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
@@ -229,7 +205,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analysis, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
-        val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
+        val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
         // Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
@@ -282,23 +258,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                                    copyCtx: DatasetCopyContext[SoQLType],
-                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]],
-                                                   rollupName: Option[RollupName]):
+                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]]):
     PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
-
-    val tableName = rollupName match {
-      case Some(r) =>
-        val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r).getOrElse {
-          throw new RuntimeException(s"Rollup ${rollupName} not found for copy ${copyCtx.copyInfo} ")
-        }
-        RollupManager.rollupTableName(rollupInfo, copyCtx.copyInfo.dataVersion)
-      case None =>
-        copyCtx.copyInfo.dataTableName
-    }
-
     new PGSecondaryRowReader[SoQLType, SoQLValue] (
       conn,
-      new PostgresRepBasedDataSqlizer(tableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
+      new PostgresRepBasedDataSqlizer(copyCtx.copyInfo.dataTableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
       pgu.commonSupport.timingReport) with RowReaderQuerier[SoQLType, SoQLValue]
   }
 
@@ -424,16 +388,12 @@ object QueryServer extends DynamicPortMap with Logging {
     if(ifaces.isEmpty) config
     else {
       val first = JString(ifaces.iterator.next().getHostAddress)
-//      Console.err.println("first" + first)
       val addressConfig = ConfigFactory.parseString("com.socrata.soql-server-bq.service-advertisement.address=" + first)
-//      Console.err.println("addressConfig" + addressConfig)
       config.withFallback(addressConfig)
     }
   }
 
   val config = try {
-//    Console.err.println(ConfigFactory.load())
-//    Console.err.println(withDefaultAddress(ConfigFactory.load()))
     new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-bq")
   } catch {
     case e: Exception =>
