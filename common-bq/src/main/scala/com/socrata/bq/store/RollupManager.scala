@@ -14,7 +14,7 @@ import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, Lifecyc
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.bq.error.RowSizeBufferSqlErrorContinue
-import com.socrata.bq.soql.{ParametricSql, SoQLAnalysisSqlizer, SqlizerContext}
+import com.socrata.bq.soql.{BQSql, SoQLAnalysisSqlizer, SqlizerContext}
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 import com.socrata.bq.store.index.{Indexable, SoQLIndexableRep}
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
@@ -203,8 +203,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       val soqlAnalysis = analysisToSoQLType(rollupAnalysis)
       val sqlizer = new SoQLAnalysisSqlizer(soqlAnalysis, copyInfo.dataTableName, rollupReps)
       val sqlCtx = Map[SqlizerContext, Any](
-        SqlizerContext.CaseSensitivity -> true,
-        SqlizerContext.LeaveGeomAsIs -> true
+        SqlizerContext.CaseSensitivity -> true
       )
 
       val dsRepMap: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
@@ -241,13 +240,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     }
   }
 
-  private def executeParamSqlUpdate(conn: Connection, pSql: ParametricSql): Int = {
+  private def executeParamSqlUpdate(conn: Connection, pSql: BQSql): Int = {
     try {
       using(conn.prepareStatement(pSql.sql)) { stmt =>
         val stmt = conn.prepareStatement(pSql.sql)
-        pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
-          setParamFn(Some(stmt), idx + 1)
-        }
         stmt.executeUpdate()
       }
     } catch {
