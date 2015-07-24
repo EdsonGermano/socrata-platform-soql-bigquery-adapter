@@ -21,8 +21,8 @@ import scala.collection.mutable
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
-  val PROJECT_NAME = "bbq_test" // "thematic-bee-98521"
-  var TABLE_NAME = "[test_set_2]" // "[ids.nyc]"
+  val PROJECT_NAME = "thematic-bee-98521"
+  var TABLE_NAME = "[ids.nyc]"
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
