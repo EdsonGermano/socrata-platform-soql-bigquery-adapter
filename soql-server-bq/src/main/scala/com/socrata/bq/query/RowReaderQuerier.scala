@@ -24,7 +24,7 @@ trait RowReaderQuerier[CT, CV] {
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
 
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
-    val resultIter = sqlizerq.query(connection, analysis, toSql, toRowCountSql, reqRowCount, querySchema, bqReps)
+    val resultIter = sqlizerq.query(connection, analysis, toSql, toRowCountSql, reqRowCount, querySchema, bqReps, new BigQueryQuerier)
     managed(resultIter)
   }
 

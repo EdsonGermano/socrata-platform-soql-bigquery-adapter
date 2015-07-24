@@ -5,6 +5,8 @@ import java.sql.{Connection, DriverManager, PreparedStatement, ResultSet}
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+import com.socrata.datacoordinator.primary.SchemaMigrator
+
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Codec
 

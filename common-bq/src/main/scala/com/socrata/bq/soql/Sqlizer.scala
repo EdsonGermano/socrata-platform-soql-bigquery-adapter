@@ -31,10 +31,6 @@ trait Sqlizer[T] {
     else false
   }
 
-  protected def appendWildCard(ctx: Context) : Boolean = {
-    false
-  }
-
   protected def usedInGroupBy(ctx: Context): Boolean = {
     val rootExpr = ctx.get(RootExpr)
     ctx(SoqlPart) match {
