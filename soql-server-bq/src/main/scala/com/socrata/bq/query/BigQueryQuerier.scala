@@ -12,10 +12,9 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-object BigQueryQuerier {
+class BigQueryQuerier extends Querier {
 
-  @throws(classOf[Exception])
-  def query(projectId: String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with BQSchema with TotalRowCount = {
+  override def query(projectId: String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with TotalRowCount = {
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
@@ -55,7 +54,7 @@ object BigQueryQuerier {
    */
   @throws(classOf[IOException])
   @throws(classOf[InterruptedException])
-  def run(projectId: String, queryString: String, batch: Boolean, waitTime: Long): Iterator[GetQueryResultsResponse] = {
+  override def run(projectId: String, queryString: String, batch: Boolean, waitTime: Long): Iterator[GetQueryResultsResponse] = {
     val bigquery: Bigquery = BigqueryServiceFactory.getService
     val query: Job = asyncQuery(bigquery, projectId, queryString, batch)
     val getRequest: Bigquery#Jobs#Get = bigquery.jobs.get(projectId, query.getJobReference.getJobId)
@@ -75,7 +74,7 @@ object BigQueryQuerier {
    * @throws IOException Thrown if there's a network exception
    */
   @throws(classOf[IOException])
-  def asyncQuery(bigquery: Bigquery, projectId: String, querySql: String, batch: Boolean): Job = {
+  override def asyncQuery(bigquery: Bigquery, projectId: String, querySql: String, batch: Boolean): Job = {
     val queryConfig: JobConfigurationQuery = new JobConfigurationQuery().setQuery(querySql)
     if (batch) {
       queryConfig.setPriority("BATCH")
@@ -83,5 +82,11 @@ object BigQueryQuerier {
     val job: Job = new Job().setConfiguration(new JobConfiguration().setQuery(queryConfig))
     bigquery.jobs.insert(projectId, job).execute
   }
+
 }
 
+trait Querier {
+  def query(projectId: String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with TotalRowCount
+  def run(projectId: String, queryString: String, batch: Boolean, waitTime: Long): Iterator[GetQueryResultsResponse]
+  def asyncQuery(bigquery: Bigquery, projectId: String, querySql: String, batch: Boolean): Job
+}

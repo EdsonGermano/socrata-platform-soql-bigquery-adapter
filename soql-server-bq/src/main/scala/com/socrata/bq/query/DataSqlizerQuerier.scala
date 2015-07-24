@@ -29,41 +29,27 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: OrderedMap[ColumnId, SoQLBigQueryReadRep[CT, CV]]) :
+               bqReps: OrderedMap[ColumnId, SoQLBigQueryReadRep[CT, CV]],
+               querier: Querier) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
-
-    // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
-    // every time, which is very expensive.  Move that out of the inner loop of decodeRow.
-    // Also, the orderedMap is extremely inefficient and very complex to debug.
-    // TODO: refactor PG server not to use Ordered Map.
-//    val decoders2 = querySchema.map { case (cid, rep) =>
-//      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
-//    }.toArray
-    val bQSql = toSql(analysis, TABLE_NAME)
-
+    val (datasetContext, dataTableName) = toRowCountSql(datasetContext, dataTableName)
+    val bQSql = toSql(analysis, dataTableName)
     logger.debug(s"RAW QUERY $bQSql")
-
     val params = bQSql.setParams.toIterator
     val queryStr = bQSql.sql.toList.map(e => e.toString).map(s => if (s.equals("?")) params.next else s).mkString
-
     logger.debug(s"QUERY: $queryStr")
 
-
-//    val decoders = Array(Tuple2(new ColumnId(1), bqReps(0).SoQL(_)))
     val decoders = bqReps.map { case (cid, rep) =>
       (cid, rep.SoQL(_))
     }.toArray
 
     // get rows
     if (analysis.selection.size > 0) {
-      val bqResult = BigQueryQuerier.query(PROJECT_NAME, queryStr)
+      val bqResult = querier.query(PROJECT_NAME, queryStr)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
-
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
-    } else {
-      logger.debug("Queried a dataset with no user columns")
-      EmptyIt
     }
+    EmptyIt
   }
 
   def decodeBigQueryRow(decoders: Array[(ColumnId, String => CV)])
