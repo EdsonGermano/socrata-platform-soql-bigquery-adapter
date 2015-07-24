@@ -7,7 +7,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.{id, Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.bq.soql.{Escape, SoQLBigQueryReadRep, BigQueryRepFactory, BQSql}
+import com.socrata.bq.soql.{Escape, BigQueryReadRep, BigQueryRepFactory, BQSql}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.typed.ColumnRef
@@ -21,6 +21,7 @@ import scala.collection.mutable
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
+  // This should not be hard-coded
   val PROJECT_NAME = "thematic-bee-98521"
   var TABLE_NAME = "[ids.nyc]"
 
@@ -29,7 +30,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: OrderedMap[ColumnId, SoQLBigQueryReadRep[CT, CV]],
+               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
                querier: Querier) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
     val (datasetContext, dataTableName) = toRowCountSql(datasetContext, dataTableName)
@@ -43,11 +44,12 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       (cid, rep.SoQL(_))
     }.toArray
 
-    // get rows
     if (analysis.selection.size > 0) {
       val bqResult = querier.query(PROJECT_NAME, queryStr)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
+    } else {
+      logger.debug("No columns selected!")
     }
     EmptyIt
   }
