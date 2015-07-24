@@ -21,184 +21,128 @@ class SqlizerTest extends FunSuite with Matchers {
 
   test("string literal with quotes") {
     val soql = "select 'there is a '' quote'"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ? FROM t1")
     setParams.length should be (1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("there is a ' quote" ))
+    setParams should be (Seq("'there is a ' quote'"))
   }
 
   test("field in (x, y...)") {
     val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT case_number FROM t1 WHERE (case_number in(?,?,?)) ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT case_number FROM t1 WHERE (case_number in(?,?,?)) ORDER BY case_number LIMIT 2 OFFSET 1")
     setParams.length should be (3)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("ha001", "ha002", "ha003"))
+    setParams should be (Seq("'ha001'", "'ha002'", "'ha003'"))
   }
 
   test("field in (x, y...) ci") {
-    val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-    sql should be ("SELECT case_number FROM t1 WHERE (upper(case_number) in(?,?,?)) ORDER BY upper(case_number) nulls last LIMIT 2 OFFSET 1")
+    val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number limit 2"
+    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
+    sql should be ("SELECT case_number FROM t1 WHERE (upper(case_number) in(?,?,?)) ORDER BY case_number LIMIT 2")
     setParams.length should be (3)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("HA001", "HA002", "HA003"))
+    setParams should be (Seq("'HA001'", "'HA002'", "'HA003'"))
   }
 
-  test("point/line/polygon") {
-    val soql = "select case_number, point, line, polygon"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT case_number,ST_AsBinary(point),ST_AsBinary(line),ST_AsBinary(polygon) FROM t1")
+  test("as implicit alias order by") {
+    val soql = "select sum(id) order by sum(id) limit 2"
+    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
+    sql should be ("SELECT (sum(id)) AS _sum_id__ FROM t1 ORDER BY _sum_id__ LIMIT 2")
     setParams.length should be (0)
+  }
+
+  test("as implicit alias no forward alias reference") {
+    val soql = "select sum(id) group by id limit 2"
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (sum(id)) AS _sum_id__ FROM t1 GROUP BY id LIMIT 2")
   }
 
   test("extent") {
-    val soql = "select extent(point), extent(multiline), extent(multipolygon)"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    println(s"SQL IS $sql")
-    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_Extent(point)))),ST_AsBinary((ST_Multi(ST_Extent(multiline)))),ST_AsBinary((ST_Multi(ST_Extent(multipolygon)))) FROM t1")
+    val soql = "select extent(point)"
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (MIN(point.lat), MIN(point.long), MAX(point.lat), MAX(point.long)) FROM t1")
     setParams.length should be (0)
-  }
-
-  test("concave hull") {
-    val soql = "select concave_hull(point, 0.99), concave_hull(multiline, 0.89), concave_hull(multipolygon, 0.79)"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(point), ?))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(multiline), ?))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(multipolygon), ?)))) FROM t1")
-    setParams.length should be (3)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(0.99, 0.89, 0.79).map(BigDecimal(_)))
-  }
-
-  test("convex hull") {
-    val soql = "select convex_hull(point), convex_hull(multiline), convex_hull(multipolygon)"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(point)))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(multiline)))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(multipolygon))))) FROM t1")
-    setParams.length should be (0)
-  }
-
-  test("intersects") {
-    val soql = "select intersects(point, 'MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))')"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (ST_Intersects(point, (ST_GeomFromText(?, 4326)))) FROM t1")
-    setParams.length should be (1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))"))
-  }
-
-  test("distance in meters") {
-    val soql = "select distance_in_meters(point, 'POINT(0 0)')"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (ST_Distance(point::geography, (ST_GeomFromText(?, 4326))::geography)) FROM t1")
-    setParams.length should be (1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("POINT(0 0)"))
   }
 
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT id FROM t1 WHERE ((id = ?) and (case_number = ?))")
     setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1, "cn001"))
+    setParams should be (Seq("1", "'cn001'"))
   }
 
   test("expr and expr ci") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseInsensitive)
+    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
     sql should be ("SELECT id FROM t1 WHERE ((id = ?) and (upper(case_number) = ?))")
     setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1, "CN001"))
+    setParams should be (Seq("1", "'CN001'"))
   }
 
   test("starts_with has automatic suffix %") {
     val soql = "select id where starts_with(case_number, 'cn')"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT id FROM t1 WHERE (case_number like (? || ?))")
-    setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("cn", "%"))
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT id FROM t1 WHERE (case_number like ?)")
+    setParams.length should be (1)
+    setParams should be (Seq("'cn%'"))
   }
 
   test("starts_with has automatic suffix % ci") {
     val soql = "select id where starts_with(case_number, 'cn')"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-    sql should be ("SELECT id FROM t1 WHERE (upper(case_number) like (? || ?))")
-    setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("CN", "%"))
+    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
+    sql should be ("SELECT id FROM t1 WHERE (upper(case_number) like ?)")
+    setParams.length should be (1)
+    setParams should be (Seq("'CN%'"))
+  }
+
+  test("explicit like") {
+    val soql = "select case_number where case_number like '%10%'"
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT case_number FROM t1 WHERE (case_number like ?)")
+    setParams should be (Seq("'%10%'"))
+    setParams.length should be (1)
   }
 
   test("between") {
     val soql = "select id where id between 1 and 9"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT id FROM t1 WHERE (id between ? and ?)")
     setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1, 9))
+    setParams should be (Seq("1", "9"))
   }
 
   test("select count(*)") {
     val soql = "select count(*)"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(*)) FROM t1")
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (count(*)) AS _count____ FROM t1")
     setParams.length should be (0)
   }
 
   test("select aggregate functions") {
     val soql = "select count(id), avg(id), min(id), max(id), sum(id)"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(id)),(avg(id)),(min(id)),(max(id)),(sum(id)) FROM t1")
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (count(id)) AS _count_id__,(avg(id)) AS _avg_id__,(min(id)) AS _min_id__,(max(id)) AS " +
+      "_max_id__,(sum(id)) AS _sum_id__ FROM t1")
     setParams.length should be (0)
   }
 
-  test("select text and number conversions") {
-    val soql = "select 123::text, '123'::number"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (?::varchar),(?::numeric) FROM t1")
-    setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(123, "123"))
+  test("bounding box") {
+    val soql = "select point where within_box(point, -60, 40, -90, 50)"
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    setParams should be (Seq("60", "90", "40", "50"))
+    sql should be ("SELECT point FROM t1 WHERE (point.lat > (-?) AND point.lat < (-?) AND point.long > ? AND point" +
+      ".long < ?)")
   }
 
-  test("search") {
-    val soql = "select id search 'oNe Two'"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT id FROM t1 WHERE to_tsvector('english', coalesce(array_12,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_11,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery('english', ?)")
-    setParams.length should be (1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("oNe Two"))
+  test("within circle") {
+    val soql = "select point where within_circle(point, 45.535, -123.424, 500)"
+    val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT point FROM t1 WHERE (((ACOS(SIN(? * PI() / 180) * SIN((point.lat/1000) * PI() / 180) " +
+      "+ COS(? * PI() / 180) * COS((point.lat/1000) * PI() / 180) * COS(((-?) - (point.long/1000)) * PI() / 180)) * " +
+      "180 / PI()) * 60 * 1.1515) < ?)")
+    setParams should be (Seq("45.535", "45.535", "123.424", "500"))
   }
 
-  test("signed magnitude 10") {
-    val soql = "select signed_magnitude_10(year)"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (sign(year) * length(floor(abs(year))::text)) FROM t1")
-    setParams.length should be (0)
-  }
-
-  test("signed magnitude linear") {
-    val soql = "select signed_magnitude_linear(year, 42)"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be("SELECT (sign(year) * floor(abs(year)/? + 1)) FROM t1")
-    setParams.length should be(1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(42))
-  }
-
-  test("case fn") {
-    val soql = "select case(primary_type = 'A', 'X', primary_type = 'B', 'Y')"
-    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (case WHEN (primary_type = ?) THEN ? WHEN (primary_type = ?) THEN ? end) FROM t1")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("A", "X", "B", "Y"))
-  }
 }
 
 object SqlizerTest {
@@ -211,7 +155,7 @@ object SqlizerTest {
     SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
   )
 
-  private def sqlize(soql: String, caseSensitivity: CaseSensitivity): ParametricSql = {
+  private def sqlize(soql: String, caseSensitivity: CaseSensitivity): BQSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
     (analysis, "t1", allColumnReps).sql(
