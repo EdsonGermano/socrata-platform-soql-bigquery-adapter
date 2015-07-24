@@ -35,7 +35,6 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   private val PROJECT_ID = config.getConfig("bigquery").getString("project-id")
   private val BQ_DATASET_ID = config.getConfig("bigquery").getString("dataset-id")
-  private val COPY_INFO_TABLE = "bbq_copy_info"
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
 
@@ -46,8 +45,6 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     }
     new Bigquery.Builder(TRANSPORT, JSON_FACTORY, credential).setApplicationName("BBQ Secondary").build()
   }
-
-  val handler = new BigqueryHandler(bigquery, PROJECT_ID, BQ_DATASET_ID)
 
   // called on graceful shutdown
   override def shutdown(): Unit = {
@@ -67,7 +64,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def currentCopyNumber(datasetInternalName: String, cookie: Cookie): Long = {
     val datasetId = parseDatasetId(datasetInternalName)
-    getCopyNumber(datasetId)
+    bigqueryUtils.getCopyNumber(datasetId)
   }
 
   override def wantsWorkingCopies: Boolean = {
@@ -77,7 +74,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
     val datasetId = parseDatasetId(datasetInternalName)
-    getDataVersion(datasetId)
+    bigqueryUtils.getDataVersion(datasetId)
   }
 
   override def resync(datasetInfo: DatasetInfo,
@@ -89,10 +86,10 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     logger.info(s"resyncing ${datasetInfo.internalName}@${copyInfo.systemId.underlying}/${copyInfo.dataVersion}/${copyInfo.copyNumber}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
     // construct ref to table
-    val columnNames: ColumnIdMap[String] = handler.makeColumnNameMap(schema)
-    val ref = handler.makeTableReference(datasetInfo, copyInfo)
-    val userSchema = schema.filter( (id, info) => handler.isUserColumn(info.id) )
-    val bqSchema = handler.makeTableSchema(userSchema, columnNames)
+    val columnNames: ColumnIdMap[String] = bigqueryUtils.makeColumnNameMap(schema)
+    val ref = bigqueryUtils.makeTableReference(BQ_DATASET_ID, datasetInfo, copyInfo)
+    val userSchema = schema.filter( (id, info) => bigqueryUtils.isUserColumn(info.id) )
+    val bqSchema = bigqueryUtils.makeTableSchema(userSchema, columnNames)
     val table = new Table()
             .setTableReference(ref)
             .setSchema(bqSchema)
@@ -124,14 +121,12 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
         }
 
       for { batch <- requests.grouped(10000) } {
-        handler.loadRows(ref, batch)
+        bigqueryUtils.loadRows(bigquery, ref, batch)
       }
     }
-    setCopyInfoEntry(datasetId, copyInfo)
+    bigqueryUtils.setCopyInfoEntry(datasetId, copyInfo)
     cookie
   }
-
-
 
   override def version(datasetInfo: DatasetInfo,
               dataVersion: Long,
@@ -157,55 +152,6 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     datasetInternalName.split('.')(1).toInt
   }
 
-  private def getCopyNumber(datasetId: Int): Int = {
-    for (conn <- managed(getConnection())) {
-      val query = "SELECT copy_number FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
-      val stmt = conn.createStatement()
-      val resultSet = stmt.executeQuery(query)
-      if (resultSet.first()) {
-        // result set has a row
-        val copyNumber = resultSet.getInt("copy_number")
-        return copyNumber
-      }
-    }
-    0
-  }
-
-  private def getDataVersion(datasetId: Int): Int = {
-    for (conn <- managed(getConnection())) {
-      val query = "SELECT data_version FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
-      val stmt = conn.createStatement()
-      val resultSet = stmt.executeQuery(query)
-      if (resultSet.first()) {
-        // result set has a row
-        val dataVersion = resultSet.getInt("data_version")
-        return dataVersion
-      }
-    }
-    0
-  }
-
-  private def setCopyInfoEntry(datasetId: Int, copyInfo: SecondaryCopyInfo) = {
-    for (conn <- managed(getConnection())) {
-      val stmt = conn.createStatement()
-      val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
-      val query = s"""
-              |BEGIN;
-              |LOCK TABLE ${COPY_INFO_TABLE} IN SHARE MODE;
-              |UPDATE ${COPY_INFO_TABLE}
-              |  SET (copy_number, data_version) = ('$copyNumber', '$version') WHERE dataset_id='$id';
-              |INSERT INTO ${COPY_INFO_TABLE} (dataset_id, copy_number, data_version)
-              |  SELECT $id, $copyNumber, $version
-              |  WHERE NOT EXISTS ( SELECT 1 FROM bbq_copy_info WHERE dataset_id='$id' );
-              |COMMIT;""".stripMargin.trim
-      stmt.executeUpdate(query)
-    }
-  }
-
-  private val dsInfo = dataSourceFromConfig(new DataSourceConfig(config, "database"))
-
-  private def getConnection() = dsInfo.dataSource.getConnection()
-
   private def dataSourceFromConfig(config: DataSourceConfig): DSInfo = {
     val dataSource = new PGSimpleDataSource
     dataSource.setServerName(config.host)
@@ -216,4 +162,8 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     dataSource.setApplicationName(config.applicationName)
     new DSInfo(dataSource, PostgresCopyIn)
   }
+
+  private val dsInfo = dataSourceFromConfig(new DataSourceConfig(config, "database"))
+
+  private val bigqueryUtils = new BigqueryUtils(dsInfo, PROJECT_ID)
 }
