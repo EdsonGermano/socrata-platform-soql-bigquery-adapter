@@ -58,7 +58,7 @@ import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 
-class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
+class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
   import QueryServer._
 
   val dsConfig: DataSourceConfig = null // unused
@@ -182,6 +182,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
+                  logger.info("Success, writing results with CJSONWriter")
                   ETag(etag)(resp)
                   copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
@@ -233,7 +234,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
         // Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
-        // associated with each column. This should eventually replace the "qryReps" parametere
+        // associated with each column. This should eventually replace the "qryReps" parameter
         // to querier.query, but for now add it as an additional parameter "bqReps"
         val repFactory = BigQueryRepFactory
         val bqReps = qrySchema.mapValues(v => repFactory(v.typ))
@@ -244,6 +245,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
           logger.info("" + k.toString + ": " + v.typ.toString)
         }
 
+        // Use the Utils to request the appropriate table name for the given internal dataset name
+        val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName)}]"
+
         val results = querier.query(
           analysis,
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
@@ -252,7 +256,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps,
-          bqReps)
+          bqReps,
+          config.bigqueryProjectId,
+          bqTableName)
         (qrySchema, latestCopy.dataVersion, results)
       }
     }
@@ -465,7 +471,7 @@ object QueryServer extends DynamicPortMap with Logging {
       reporter <- MetricsReporter.managed(config.metrics)
     } {
       pong.start()
-      val queryServer = new QueryServer(dsInfo, CaseSensitive)
+      val queryServer = new QueryServer(config, new BigqueryUtils(dsInfo, config.bigqueryProjectId), dsInfo, CaseSensitive)
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))
