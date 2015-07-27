@@ -27,7 +27,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
                bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
-               projectId: String,
+               querier: BigQueryQuerier,
                bqTableName: String) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
@@ -46,7 +46,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     // get rows
     if (analysis.selection.size > 0) {
-      val bqResult = BigQueryQuerier.query(projectId, queryStr)
+      val bqResult = querier.query(queryStr)
+      bqResult.foreach(println)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
     } else {

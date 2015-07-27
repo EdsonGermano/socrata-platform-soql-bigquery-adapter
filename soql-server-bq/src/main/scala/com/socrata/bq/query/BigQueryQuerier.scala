@@ -1,7 +1,6 @@
 package com.socrata.bq.query
 
 import java.io.IOException
-import java.util.{Scanner}
 
 import com.google.api.services.bigquery.Bigquery
 import com.google.api.services.bigquery.model._
@@ -12,29 +11,35 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-object BigQueryQuerier {
+class BigQueryQuerier(projectId: String) {
 
   @throws(classOf[Exception])
-  def query(projectId: String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with TotalRowCount = {
+  def query(queryString: String): ArrayBuffer[mutable.Buffer[String]] with TotalRowCount = {
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
 
     val allPages: Array[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime).toArray
 
-    val result = new ArrayBuffer[mutable.Buffer[mutable.Buffer[String]]]() with TotalRowCount
+    val result = new ArrayBuffer[mutable.Buffer[String]]() with TotalRowCount
 
     if (!allPages.isEmpty && allPages.head.getTotalRows.longValue > 0) {
       // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
       // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
       // there is no object.
-      result.rowCount = allPages.head.getTotalRows.longValue
-      allPages.map(x => x.getRows.map(r => r.getF.map(f => f.getV.getClass.getSimpleName match {
-        case "String" => f.getV.toString
-        case _ => null
-      }))).foreach(e => result.add(e))
+      allPages.map(x => x.getRows.map(
+        r => {
+          val row = new mutable.ArrayBuffer[String]()
+          r.getF.map(f => f.getV.getClass.getSimpleName match {
+               case "String" => f.getV.toString
+               case _ => null
+          }).foreach(m => row.add(m))
+          result.add(row)
+        }
+      ))
     }
-    result.asInstanceOf[ArrayBuffer[mutable.Buffer[String]] with TotalRowCount]
+    result.rowCount = allPages.head.getTotalRows.longValue
+    result
   }
 
   /**
