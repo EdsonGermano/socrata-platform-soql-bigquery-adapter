@@ -47,6 +47,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // get rows
     if (analysis.selection.size > 0) {
       val bqResult = querier.query(queryStr)
+      bqResult.foreach(println)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
     } else {

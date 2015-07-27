@@ -21,19 +21,25 @@ class BigQueryQuerier(projectId: String) {
 
     val allPages: Array[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime).toArray
 
-    val result = new ArrayBuffer[mutable.Buffer[mutable.Buffer[String]]]() with TotalRowCount
+    val result = new ArrayBuffer[mutable.Buffer[String]]() with TotalRowCount
 
     if (!allPages.isEmpty && allPages.head.getTotalRows.longValue > 0) {
       // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
       // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
       // there is no object.
-      result.rowCount = allPages.head.getTotalRows.longValue
-      allPages.map(x => x.getRows.map(r => r.getF.map(f => f.getV.getClass.getSimpleName match {
-        case "String" => f.getV.toString
-        case _ => null
-      }))).foreach(e => result.add(e))
+      allPages.map(x => x.getRows.map(
+        r => {
+          val row = new mutable.ArrayBuffer[String]()
+          r.getF.map(f => f.getV.getClass.getSimpleName match {
+               case "String" => f.getV.toString
+               case _ => null
+          }).foreach(m => row.add(m))
+          result.add(row)
+        }
+      ))
     }
-    result.asInstanceOf[ArrayBuffer[mutable.Buffer[String]] with TotalRowCount]
+    result.rowCount = allPages.head.getTotalRows.longValue
+    result
   }
 
   /**
