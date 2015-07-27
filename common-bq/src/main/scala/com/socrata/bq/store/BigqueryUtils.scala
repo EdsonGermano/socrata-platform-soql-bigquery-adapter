@@ -88,10 +88,10 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
 
   def getCopyNumber(datasetId: Long): Long = {
     for (conn <- managed(getConnection())) {
-      val query = "SELECT copy_number FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
+      val query = s"SELECT copy_number FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
       val stmt = conn.createStatement()
       val resultSet = stmt.executeQuery(query)
-      if (resultSet.first()) {
+      if (resultSet.next()) {
         // result set has a row
         val copyNumber = resultSet.getInt("copy_number")
         return copyNumber
@@ -102,7 +102,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
 
   def getDataVersion(datasetId: Long): Long = {
     for (conn <- managed(getConnection())) {
-      val query = "SELECT data_version FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
+      val query = s"SELECT data_version FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
       val stmt = conn.createStatement()
       val resultSet = stmt.executeQuery(query)
       if (resultSet.first()) {
