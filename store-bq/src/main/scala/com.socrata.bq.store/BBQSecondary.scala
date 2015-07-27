@@ -96,6 +96,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
     try {
       bigquery.tables.insert(PROJECT_ID, BQ_DATASET_ID, table).execute()
+      logger.info(s"Inserting into ${ref.getTableId}")
     } catch {
       case e: GoogleJsonResponseException => {
         if (e.getDetails.getCode == 409) {

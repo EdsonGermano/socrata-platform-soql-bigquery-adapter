@@ -1,5 +1,7 @@
 package com.socrata.bq.store
 
+import java.sql.ResultSet
+
 import collection.JavaConversions._
 
 import com.socrata.bq.soql.BigQueryRepFactory
@@ -50,7 +52,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
     new TableReference()
         .setProjectId(bqProjectId)
         .setDatasetId(bqDatasetId)
-        .setTableId(makeTableName(datasetInfo.internalName, copyInfo.systemId.underlying))
+        .setTableId(makeTableName(datasetInfo.internalName, copyInfo.copyNumber))
   }
 
   def makeColumnName(columnId: ColumnId, userColumnId: UserColumnId) = {
@@ -89,9 +91,9 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
   def getCopyNumber(datasetId: Long): Long = {
     for (conn <- managed(getConnection())) {
       val query = s"SELECT copy_number FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
-      val stmt = conn.createStatement()
+      val stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)
       val resultSet = stmt.executeQuery(query)
-      if (resultSet.next()) {
+      if (resultSet.first()) {
         // result set has a row
         val copyNumber = resultSet.getInt("copy_number")
         return copyNumber
