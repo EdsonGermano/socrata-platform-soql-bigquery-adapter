@@ -1,7 +1,6 @@
 package com.socrata.bq.query
 
 import java.io.IOException
-import java.util.{Scanner}
 
 import com.google.api.services.bigquery.Bigquery
 import com.google.api.services.bigquery.model._
@@ -12,10 +11,10 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-object BigQueryQuerier {
+class BigQueryQuerier(projectId: String) {
 
   @throws(classOf[Exception])
-  def query(projectId: String, queryString: String): ArrayBuffer[mutable.Buffer[String]] with TotalRowCount = {
+  def query(queryString: String): ArrayBuffer[mutable.Buffer[String]] with TotalRowCount = {
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
