@@ -77,7 +77,6 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     override def next(): Row[CV] = {
       if (hasNext) {
         val rowVal = it.next()
-        logger.info("BQ row value: " + rowVal)
         toRow(rowVal)
       } else {
         throw new Exception("No more data for the BigQueryResultSetIt")
