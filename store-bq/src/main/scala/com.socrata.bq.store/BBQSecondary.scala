@@ -83,9 +83,9 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       cookie: Secondary.Cookie,
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
-    logger.info(s"resyncing ${datasetInfo.internalName}@${copyInfo.systemId.underlying}/${copyInfo.dataVersion}/${copyInfo.copyNumber}")
+    logger.info(s"resyncing ${datasetInfo.internalName}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
-    // construct ref to table
+    // make table reference and bigquery metadata
     val columnNames: ColumnIdMap[String] = bigqueryUtils.makeColumnNameMap(schema)
     val ref = bigqueryUtils.makeTableReference(BQ_DATASET_ID, datasetInfo, copyInfo)
     val userSchema = schema.filter( (id, info) => bigqueryUtils.isUserColumn(info.id) )
@@ -122,7 +122,9 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
         }
 
       for { batch <- requests.grouped(10000) } {
-        bigqueryUtils.loadRows(bigquery, ref, batch)
+        val content = new ByteArrayContent("application/octet-stream", batch.mkString("\n").toCharArray.map(_.toByte))
+        val insert = bigquery.jobs.insert(PROJECT_ID, bigqueryUtils.makeLoadJob(ref), content)
+        insert.execute()
       }
     }
     bigqueryUtils.setCopyInfoEntry(datasetId, copyInfo)

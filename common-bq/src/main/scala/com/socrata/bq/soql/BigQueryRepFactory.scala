@@ -15,6 +15,6 @@ object BigQueryRepFactory {
   )
 
   def apply(givenType : SoQLType) : BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] = {
-    RepFactory(givenType)
+    RepFactory.getOrElse(givenType, new NullRep)
   }
 }

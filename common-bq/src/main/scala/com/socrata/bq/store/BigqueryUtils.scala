@@ -77,15 +77,11 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
     new TableSchema().setFields(fields)
   }
 
-  def loadRows(bigquery: Bigquery, ref: TableReference, rows: Seq[String]) {
+  def makeLoadJob(ref: TableReference) = {
     val config = new JobConfigurationLoad()
             .setDestinationTable(ref)
             .setSourceFormat("NEWLINE_DELIMITED_JSON")
-            .setWriteDisposition("WRITE_TRUNCATE")
-
-    val content = new ByteArrayContent("application/octet-stream", rows.mkString("\n").toCharArray.map(_.toByte))
-    val insert = bigquery.jobs.insert(bqProjectId, new Job().setConfiguration(new JobConfiguration().setLoad(config)), content)
-    insert.execute()
+    new Job().setConfiguration(new JobConfiguration().setLoad(config))
   }
 
   def getCopyNumber(datasetId: Long): Long = {
