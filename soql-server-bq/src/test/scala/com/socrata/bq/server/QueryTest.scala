@@ -25,20 +25,27 @@ import com.socrata.bq.soql.{CaseSensitive}
 import com.socrata.http.server.util.NoPrecondition
 import com.socrata.bq.query.{TotalRowCount, BigQueryQuerier, BQQueryTestBase}
 
+
+object QueryTest {
+  // should not be hard coded
+  val DATASET_ID = "test"
+  val TABLE_ID = "dataset"
+  val FULL_TABLE_NAME = s"[${DATASET_ID}.${TABLE_ID}]"
+}
+
 class QueryTest extends FunSuite with BeforeAndAfterAll with Matchers {
 
   var bqQuerier: BigQueryQuerier = null
 
   // TODO: Make the test database come from a conf. file
-
   override def beforeAll() = {
     bqQuerier = new BigQueryQuerier("thematic-bee-98521")
   }
 
-  def queryAndCompare(queryString: String, expected: ArrayBuffer[mutable.Buffer[String]] with TotalRowCount) = {
+  def queryAndCompare(queryString: String, expected: ArrayBuffer[mutable.Buffer[String]], rc: Integer) = {
     val result = bqQuerier.query(queryString)
     result shouldEqual expected
-    result.rowCount shouldEqual expected.rowCount
+    result.rowCount shouldEqual rc
   }
 
 }
