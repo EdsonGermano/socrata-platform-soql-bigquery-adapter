@@ -137,14 +137,12 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     val internalName = datasetInfo.internalName
     logger.info(s"version called for dataset ${internalName}@${dataVersion}")
 
-    events.foreach { event =>
-      event match {
-        case WorkingCopyPublished => {
-          logger.info(">> got publish event; throwing resync")
-          throw new ResyncSecondaryException("resync from WorkingCopyPublished")
-        }
-        case _ => ()
+    events.foreach {
+      case WorkingCopyPublished => {
+        logger.info(">> got publish event; throwing resync")
+        throw new ResyncSecondaryException("resync from WorkingCopyPublished")
       }
+      case _ => ()
     }
 
     cookie

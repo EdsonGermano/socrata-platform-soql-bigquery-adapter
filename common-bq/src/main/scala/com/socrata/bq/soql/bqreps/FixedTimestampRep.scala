@@ -4,6 +4,7 @@ import com.rojoma.json.v3.ast.{JString, JNull, JValue}
 import com.socrata.bq.soql.{BigQueryWriteRep, BigQueryReadRep}
 import com.socrata.soql.types.{SoQLNull, SoQLValue, SoQLType, SoQLFixedTimestamp}
 import org.joda.time.DateTime
+import org.joda.time.format.ISODateTimeFormat
 
 class FixedTimestampRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] {
 
@@ -15,6 +16,7 @@ class FixedTimestampRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQue
   override def SoQL(value: String): SoQLValue = {
     if (value == null) SoQLNull
     else SoQLFixedTimestamp(new DateTime(value.toDouble.toLong / 1000))
+//    else SoQLFixedTimestamp(ISODateTimeFormat.dateTimeParser.withZoneUTC.parseDateTime(value))
   }
 
   override def jvalue(value: SoQLValue): JValue = {
