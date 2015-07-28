@@ -88,8 +88,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     // make table reference and bigquery metadata
     val columnNames: ColumnIdMap[String] = bigqueryUtils.makeColumnNameMap(schema)
     val ref = bigqueryUtils.makeTableReference(BQ_DATASET_ID, datasetInfo, copyInfo)
-    val userSchema = schema.filter( (id, info) => bigqueryUtils.isUserColumn(info.id) )
-    val bqSchema = bigqueryUtils.makeTableSchema(userSchema, columnNames)
+    val bqSchema = bigqueryUtils.makeTableSchema(schema, columnNames)
     val table = new Table()
             .setTableReference(ref)
             .setSchema(bqSchema)

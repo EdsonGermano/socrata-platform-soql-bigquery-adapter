@@ -56,14 +56,19 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
   }
 
   def makeColumnName(columnId: ColumnId, userColumnId: UserColumnId) = {
-    val parts = userColumnId.underlying.split('-')
-    s"u_${parts(0)}_${parts(1)}_${columnId.underlying}"
+    if (userColumnId.underlying.charAt(0) == ':') {
+      // here we expect userColumnId.underlying to be like `:snake_case_identifier`
+      val name = userColumnId.underlying.substring(1)
+      s"s_${name}_${columnId.underlying}"
+    } else {
+      // here we expect userColumnId.underlying to be like `a2c4-1b3d`
+      val name = userColumnId.underlying.replace('-', '_')
+      s"u_${name}_${columnId.underlying}"
+    }
   }
 
-  def isUserColumn(id: UserColumnId) = id.underlying.charAt(0) != ':'
-
   def makeColumnNameMap(soqlSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]]): ColumnIdMap[String] = {
-    soqlSchema.filter( (id, info) => isUserColumn(info.id) ).transform( (id, info) => makeColumnName(id, info.id) )
+    soqlSchema.transform( (id, info) => makeColumnName(id, info.id) )
   }
 
   def makeTableSchema(userColumnInfo: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
