@@ -1,4 +1,4 @@
-package com.socrata.bq.server
+//package com.socrata.bq.server
 
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.bq.store.PGSecondaryUniverse
@@ -12,9 +12,9 @@ import com.socrata.bq.soql.CaseSensitive
  * @param dsInfo
  * @param pgu
  */
-class QueryServerTest(dsInfo:DSInfo, pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) extends QueryServer(dsInfo, CaseSensitive) {
-
-  override protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
-    f(pgu)
-  }
-}
+//class QueryServerTest(dsInfo:DSInfo, pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) extends QueryServer(dsInfo, CaseSensitive) {
+//
+//  override protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+//    f(pgu)
+//  }
+//}
