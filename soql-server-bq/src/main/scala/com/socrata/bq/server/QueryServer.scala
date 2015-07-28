@@ -4,11 +4,7 @@ import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
-
-import com.socrata.soql.functions.SoQLTypeInfo
-
 import scala.language.existentials
-
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.simplearm.Managed
@@ -36,7 +32,7 @@ import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingH
 import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.bq.{SecondaryBase, Version}
 import com.socrata.bq.Schema._
-import com.socrata.bq.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
+import com.socrata.bq.query.{EmptyIt, DataSqlizerQuerier, RowCount, RowReaderQuerier}
 import com.socrata.bq.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.bq.soql._
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
@@ -246,20 +242,28 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         }
 
         // Use the Utils to request the appropriate table name for the given internal dataset name
-        val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName)}]"
+        val copyNumberOption = bqUtils.getCopyNumber(datasetInfo.systemId.underlying)
 
-        val results = querier.query(
-          analysis,
-          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx, escape),
-          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
-          rowCount,
-          qryReps,
-          bqReps,
-          config.bigqueryProjectId,
-          bqTableName)
-        (qrySchema, latestCopy.dataVersion, results)
+        // Determine whether copyNumber is 0 or not
+        // Return empty (do not perform query) if copyNumber is 0
+        copyNumberOption match {
+          case Some(copyNumber) => {
+            val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName, copyNumber)}]"
+            val results = querier.query(
+              analysis,
+              (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+                (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx, escape),
+              (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+                (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
+              rowCount,
+              qryReps,
+              bqReps,
+              config.bigqueryProjectId,
+              bqTableName)
+            (qrySchema, latestCopy.dataVersion, results)
+          }
+          case None => (qrySchema, latestCopy.dataVersion, managed(EmptyIt))
+        }
       }
     }
 

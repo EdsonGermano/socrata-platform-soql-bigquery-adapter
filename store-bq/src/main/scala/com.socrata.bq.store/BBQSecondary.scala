@@ -64,7 +64,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def currentCopyNumber(datasetInternalName: String, cookie: Cookie): Long = {
     val datasetId = parseDatasetId(datasetInternalName)
-    bigqueryUtils.getCopyNumber(datasetId)
+    bigqueryUtils.getCopyNumber(datasetId).getOrElse(0)
   }
 
   override def wantsWorkingCopies: Boolean = {
@@ -74,7 +74,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
     val datasetId = parseDatasetId(datasetInternalName)
-    bigqueryUtils.getDataVersion(datasetId)
+    bigqueryUtils.getDataVersion(datasetId).getOrElse(0)
   }
 
   override def resync(datasetInfo: DatasetInfo,

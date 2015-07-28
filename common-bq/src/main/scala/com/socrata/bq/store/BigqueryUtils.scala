@@ -36,14 +36,6 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
     datasetInternalName.split('.')(1).toInt
   }
 
-  def makeTableName(datasetId: Long): String = {
-    makeTableName("primus." + datasetId, getCopyNumber(datasetId))
-  }
-
-  def makeTableName(datasetInternalName: String): String = {
-    makeTableName(datasetInternalName, getCopyNumber(parseDatasetId(datasetInternalName)))
-  }
-
   def makeTableName(datasetInternalName: String, copyNumber: Long): String = {
     datasetInternalName.replace('.', '_') + "_" + copyNumber
   }
@@ -89,7 +81,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
     new Job().setConfiguration(new JobConfiguration().setLoad(config))
   }
 
-  def getCopyNumber(datasetId: Long): Long = {
+  def getCopyNumber(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
       val query = s"SELECT copy_number FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
       val stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)
@@ -97,13 +89,13 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
       if (resultSet.first()) {
         // result set has a row
         val copyNumber = resultSet.getInt("copy_number")
-        return copyNumber
+        return Some(copyNumber)
       }
     }
-    0
+    None
   }
 
-  def getDataVersion(datasetId: Long): Long = {
+  def getDataVersion(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
       val query = s"SELECT data_version FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
       val stmt = conn.createStatement()
@@ -111,10 +103,10 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
       if (resultSet.first()) {
         // result set has a row
         val dataVersion = resultSet.getInt("data_version")
-        return dataVersion
+        return Some(dataVersion)
       }
     }
-    0
+    None
   }
 
   def setCopyInfoEntry(datasetId: Long, copyInfo: SecondaryCopyInfo) = {
