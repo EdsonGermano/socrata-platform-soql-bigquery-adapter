@@ -97,7 +97,6 @@ object CJSONWriter {
         var result = new Array[JValue](row.size)
 
         for (i <- 0 until result.length) {
-          logger.info("Row: " + row(cids(i)))
           result(i) = reps(i).toJValue(row(cids(i)))
         }
         writer.write("\n,")

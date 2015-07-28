@@ -47,7 +47,6 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // get rows
     if (analysis.selection.size > 0) {
       val bqResult = querier.query(queryStr)
-      bqResult.foreach(println)
       logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
       new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
     } else {
@@ -90,13 +89,13 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     override def close(): Unit = {}
   }
+}
 
-  object EmptyIt extends CloseableIterator[Nothing] with RowCount {
-    val rowCount = Some(0L)
-    def hasNext = false
-    def next() = throw new Exception("Called next() on an empty iterator")
-    def close() {}
-  }
+object EmptyIt extends CloseableIterator[Nothing] with RowCount {
+  val rowCount = Some(0L)
+  def hasNext = false
+  def next() = throw new Exception("Called next() on an empty iterator")
+  def close() {}
 }
 
 trait RowCount {
