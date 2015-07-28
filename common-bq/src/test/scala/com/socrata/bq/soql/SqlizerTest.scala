@@ -79,6 +79,8 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams should be (Seq("1", "'CN001'"))
   }
 
+
+
   test("starts_with has automatic suffix %") {
     val soql = "select id where starts_with(case_number, 'cn')"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)

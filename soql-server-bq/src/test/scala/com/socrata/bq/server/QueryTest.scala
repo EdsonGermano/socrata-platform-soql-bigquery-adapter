@@ -42,9 +42,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll with Matchers {
     bqQuerier = new BigQueryQuerier("thematic-bee-98521")
   }
 
-  def queryAndCompare(queryString: String, expected: ArrayBuffer[mutable.Buffer[String]], rc: Integer) = {
+  def queryAndCompare(queryString: String, expected: Option[ArrayBuffer[mutable.Buffer[String]]], rc: Integer) = {
     val result = bqQuerier.query(queryString)
-    result shouldEqual expected
+    // wrap it in an option so that 
+    expected match {
+      case Some(x) => result shouldEqual x
+    }
     result.rowCount shouldEqual rc
   }
 
