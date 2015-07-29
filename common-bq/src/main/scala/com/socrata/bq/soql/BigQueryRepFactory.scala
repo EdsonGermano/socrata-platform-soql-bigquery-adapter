@@ -15,7 +15,8 @@ object BigQueryRepFactory extends Logging {
     SoQLFloatingTimestamp -> new FloatingTimestampRep,
     SoQLDate -> new DateRep,    // Date may not be working correctly
     SoQLDouble -> new DoubleRep,
-    SoQLBoolean -> new BooleanRep
+    SoQLBoolean -> new BooleanRep,
+    SoQLPoint -> new PointRep
   )
 
   def apply(givenType : SoQLType) : BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] = {
