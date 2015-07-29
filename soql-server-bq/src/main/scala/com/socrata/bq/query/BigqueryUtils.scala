@@ -17,21 +17,6 @@ import java.util.NoSuchElementException
  * Helper functions for the other classes.
  */
 object BigqueryUtils {
-  /**
-   * Print rows to the output stream in a formatted way.
-   * @param rows rows in bigquery
-   * @param out Output stream we want to print to
-   */
-  def printRows(rows: List[TableRow], out: PrintStream) {
-    import scala.collection.JavaConversions._
-    for (row <- rows) {
-      import scala.collection.JavaConversions._
-      for (field <- row.getF) {
-        out.printf("%-50s", field.getV)
-      }
-      out.println
-    }
-  }
 
   /**
    * Polls the job for completion.
@@ -46,7 +31,6 @@ object BigqueryUtils {
   def pollJob(request: Bigquery#Jobs#Get, interval: Long): Job = {
     var job: Job = request.execute
     while (!(job.getStatus.getState == "DONE")) {
-      System.out.println("Job is " + job.getStatus.getState + " waiting " + interval + " milliseconds...")
       Thread.sleep(interval)
       job = request.execute
     }
@@ -112,28 +96,5 @@ object BigqueryUtils {
       }
     }
     return new PageIterator(requestTemplate)
-  }
-
-  /**
-   * Display all BigQuery datasets associated with a project.
-   *
-   * @param bigquery  an authorized BigQuery client
-   * @param projectId a string containing the current project ID
-   * @throws IOException Thrown if there is a network error connecting to
-   *                     Bigquery.
-   */
-  @throws(classOf[IOException])
-  def listDatasets(bigquery: Bigquery, projectId: String) {
-    val datasetRequest: Bigquery#Datasets#List = bigquery.datasets.list(projectId)
-    val datasetList: DatasetList = datasetRequest.execute
-    if (datasetList.getDatasets != null) {
-      val datasets: List[DatasetList.Datasets] = datasetList.getDatasets
-      System.out.println("Available datasets\n----------------")
-      System.out.println(datasets.toString)
-      import scala.collection.JavaConversions._
-      for (dataset <- datasets) {
-        System.out.format("%s\n", dataset.getDatasetReference.getDatasetId)
-      }
-    }
   }
 }

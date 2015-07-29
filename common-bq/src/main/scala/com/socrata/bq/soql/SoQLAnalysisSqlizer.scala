@@ -116,7 +116,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val BQSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
       val timeStampConv = if (coreExpr.typ.toString.contains("timestamp")) s"TIMESTAMP_TO_USEC($sql)" else sql
-      (t2._1 :+ timeStampConv, newSetParams)
+      val pointConv = if (coreExpr.typ.toString.contains("point")) s"${sql}.lat, ${sql}.long" else sql
+      (t2._1 :+ pointConv, newSetParams)
     }
   }
 

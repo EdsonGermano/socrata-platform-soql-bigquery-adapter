@@ -1,6 +1,6 @@
 package com.socrata.bq.query
 
-trait PGQueryTestBase {
+trait BQQueryTestBase {
 
   val dcInstance = "alpha"
 

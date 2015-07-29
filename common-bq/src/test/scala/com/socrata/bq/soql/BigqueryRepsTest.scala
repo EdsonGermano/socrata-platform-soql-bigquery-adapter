@@ -50,7 +50,6 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLFixedTimestamp") {
     forAll { (date: DateTime) =>
-      println(date)
       val s = BigQueryRepFactory(SoQLFixedTimestamp).SoQL(date.getMillis + "000")
       s.typ should be (SoQLFixedTimestamp)
       s.asInstanceOf[SoQLFixedTimestamp].value should be (date)
