@@ -42,7 +42,7 @@ class BigQueryQuerier(projectId: String) {
             if (schema(i).getName.endsWith("_long")) {
               // This will throw an ArrayIndexOutOfBounds exception if longitude is ever at index 0
               // We assume that latitude and longitude are selected together, as (lat, long)
-              row.update(i-1, s"${row.last},$m")
+              row.update(i-1, s"$m,${row.last}")
             }
             else row.add(m)
             i = i + 1
