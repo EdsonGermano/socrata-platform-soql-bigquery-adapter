@@ -44,9 +44,10 @@ class QueryTest extends FunSuite with BeforeAndAfterAll with Matchers {
 
   def queryAndCompare(queryString: String, expected: Option[ArrayBuffer[mutable.Buffer[String]]], rc: Integer) = {
     val result = bqQuerier.query(queryString)
-    // wrap it in an option so that 
+    // wrap it in an option so that if the result is too big to compare, just compare the row count
     expected match {
       case Some(x) => result shouldEqual x
+      case _ =>
     }
     result.rowCount shouldEqual rc
   }
