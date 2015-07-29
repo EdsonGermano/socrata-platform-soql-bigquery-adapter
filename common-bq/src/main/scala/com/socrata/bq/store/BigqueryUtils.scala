@@ -63,15 +63,38 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
     soqlSchema.transform( (id, info) => makeColumnName(id, info.id) )
   }
 
-  def makeTableSchema(userColumnInfo: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+  def makeTableSchema(schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
                       columnNameMap: ColumnIdMap[String]): TableSchema = {
     // map over the values of userColumnInfo, converting to bigquery TableFieldSchema
-    val fields = userColumnInfo.iterator.toList.sortBy(_._1.underlying).map { case (id, info) => {
-      new TableFieldSchema()
-          .setName(columnNameMap(id))
-          .setType(BigQueryRepFactory(info.typ).bigqueryType)
-    }}
-    new TableSchema().setFields(fields)
+    val sortedSchema = schema.iterator.toList.sortBy(_._1.underlying)
+
+    val fieldList = sortedSchema.foldLeft(List[TableFieldSchema]()) { (fields, t) =>
+      val (id, info) = t
+      info.typ match {
+        case SoQLPoint => {
+          val name = columnNameMap(id)
+          fields ++ List(
+            new TableFieldSchema()
+              .setName(name)
+              .setType("RECORD")
+              .setFields(List(
+                new TableFieldSchema()
+                  .setName("lat")
+                  .setType("FLOAT"),
+                new TableFieldSchema()
+                  .setName("long")
+                  .setType("FLOAT")
+            ))
+          )
+        }
+        case typ => {
+          fields ++ List(new TableFieldSchema()
+            .setName(columnNameMap(id))
+            .setType(BigQueryRepFactory(info.typ).bigqueryType))
+        }
+      }
+    }
+    new TableSchema().setFields(fieldList)
   }
 
   def makeLoadJob(ref: TableReference) = {
