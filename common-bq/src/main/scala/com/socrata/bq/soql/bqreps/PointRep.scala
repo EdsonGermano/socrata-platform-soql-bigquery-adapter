@@ -13,7 +13,7 @@ class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRe
 
   override val bigqueryType: String = "RECORD"
 
-  // Parses points return from big query in the form "lat,long"
+  // Parses points return from big query in the form "long,lat"
   override def SoQL(value: String): SoQLValue = {
     if (value == null) SoQLNull
     else {
