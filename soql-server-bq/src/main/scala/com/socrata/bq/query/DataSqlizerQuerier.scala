@@ -18,13 +18,14 @@ import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
 
+// TODO: Make this the main class for executing the query
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
-               reqRowCount: Boolean,
+               reqRowCount: Boolean, // TODO: Remove since google bigquery already gives reqRowCount
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
                bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
                querier: BigQueryQuerier,
