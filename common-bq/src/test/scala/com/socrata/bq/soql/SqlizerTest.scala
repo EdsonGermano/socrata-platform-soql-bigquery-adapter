@@ -79,6 +79,13 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams should be (Seq("1", "'CN001'"))
   }
 
+  test("point conversion") {
+    val soql = "select point limit 2"
+    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
+    sql should be ("SELECT point.lat, point.long FROM t1 LIMIT 2")
+    setParams.length should be (0)
+  }
+
   test("starts_with has automatic suffix %") {
     val soql = "select id where starts_with(case_number, 'cn')"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
@@ -130,14 +137,14 @@ class SqlizerTest extends FunSuite with Matchers {
     val soql = "select point where within_box(point, -60, 40, -90, 50)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
     setParams should be (Seq("60", "90", "40", "50"))
-    sql should be ("SELECT point FROM t1 WHERE (point.lat > (-?) AND point.lat < (-?) AND point.long > ? AND point" +
+    sql should be ("SELECT point.lat, point.long FROM t1 WHERE (point.lat > (-?) AND point.lat < (-?) AND point.long > ? AND point" +
       ".long < ?)")
   }
 
   test("within circle") {
     val soql = "select point where within_circle(point, 45.535, -123.424, 500)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT point FROM t1 WHERE (((ACOS(SIN(? * PI() / 180) * SIN((point.lat/1000) * PI() / 180) " +
+    sql should be ("SELECT point.lat, point.long FROM t1 WHERE (((ACOS(SIN(? * PI() / 180) * SIN((point.lat/1000) * PI() / 180) " +
       "+ COS(? * PI() / 180) * COS((point.lat/1000) * PI() / 180) * COS(((-?) - (point.long/1000)) * PI() / 180)) * " +
       "180 / PI()) * 60 * 1.1515) < ?)")
     setParams should be (Seq("45.535", "45.535", "123.424", "500"))
