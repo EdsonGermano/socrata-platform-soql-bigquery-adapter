@@ -238,9 +238,9 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         val bqReps = qrySchema.mapValues(v => repFactory(v.typ))
 
         // Print the schema for this query
-        logger.info("Query schema: ")
+        logger.debug("Query schema: ")
         qrySchema.foreach { case (k, v) =>
-          logger.info("" + k.toString + ": " + v.typ.toString)
+          logger.debug(s"${k.toString}: ${v.typ.toString}")
         }
 
         // Use the Utils to request the appropriate table name for the given internal dataset name
