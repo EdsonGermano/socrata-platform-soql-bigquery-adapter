@@ -166,6 +166,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
+    // TODO: Factor out PGU and replace with BigQueryUtils functions, make linear
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
@@ -213,6 +214,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     import Sqlizer._
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
+      // TODO: Why are we accessing truth? Why do we need the obfuscation key? Do we need to keep the PGU Universe?
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
@@ -253,6 +255,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
               analysis,
               (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
                 (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx, escape),
+            // TODO: Remove RowCount since GoogleBigQuery returns us the row count already
               (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
                 (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
               rowCount,
@@ -360,6 +363,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
+  // TODO: this is never used
   def getRollups(ds: String, reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
@@ -376,10 +380,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
+  // TODO: this is never used
   private def getSchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: CopyInfo): Schema = {
     pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
   }
 
+  // TODO: this is no longer used
   private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
                       : Option[CopyInfo] = {
     for {
@@ -390,6 +396,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
+  // TODO: this is no longer used
   private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
     val intRx = "^[0-9]+$".r
     val rd = pgu.datasetMapReader
