@@ -26,12 +26,12 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
   import DateTimes._
 
   test("SoQLBoolean") {
-    val s = BigQueryRepFactory(SoQLBoolean).SoQL(Seq("true"), 0)
+    val s = BigQueryRepFactory(SoQLBoolean).SoQL(Seq("true"))
     s.typ should be (SoQLBoolean)
     s.asInstanceOf[SoQLBoolean].value should be (true)
     s should be (SoQLBoolean(true))
 
-    val s2 = BigQueryRepFactory(SoQLBoolean).SoQL(Seq("false"), 0)
+    val s2 = BigQueryRepFactory(SoQLBoolean).SoQL(Seq("false"))
     s2.typ should be (SoQLBoolean)
     s2.asInstanceOf[SoQLBoolean].value should be (false)
     s2 should be (SoQLBoolean(false))
@@ -39,7 +39,7 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLNumber") {
     forAll { d : Double =>
-      val s = BigQueryRepFactory(SoQLNumber).SoQL(Seq(d.toString), 0)
+      val s = BigQueryRepFactory(SoQLNumber).SoQL(Seq(d.toString))
       s.typ should be (SoQLNumber)
       s.asInstanceOf[SoQLNumber].value should be (new java.math.BigDecimal(d))
       s should be (SoQLNumber(new java.math.BigDecimal(d)))
@@ -48,7 +48,7 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLText") {
     forAll { (str: String) =>
-      val s = BigQueryRepFactory(SoQLText).SoQL(Seq(str), 0)
+      val s = BigQueryRepFactory(SoQLText).SoQL(Seq(str))
       s.typ should be (SoQLText)
       s.asInstanceOf[SoQLText].value should be (str)
       s should be (SoQLText(str))
@@ -57,7 +57,7 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLFixedTimestamp") {
     forAll { (date: DateTime) =>
-      val s = BigQueryRepFactory(SoQLFixedTimestamp).SoQL(Seq(date.getMillis + "000"), 0)
+      val s = BigQueryRepFactory(SoQLFixedTimestamp).SoQL(Seq(date.getMillis + "000"))
       s.typ should be (SoQLFixedTimestamp)
       s.asInstanceOf[SoQLFixedTimestamp].value should be (date)
       s should be (SoQLFixedTimestamp(date))
@@ -66,7 +66,7 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLFloatingTimestamp") {
     forAll { (date: DateTime) =>
-      val s = BigQueryRepFactory(SoQLFloatingTimestamp).SoQL(Seq(date.getMillis + "000"), 0)
+      val s = BigQueryRepFactory(SoQLFloatingTimestamp).SoQL(Seq(date.getMillis + "000"))
       s.typ should be (SoQLFloatingTimestamp)
       s.asInstanceOf[SoQLFloatingTimestamp].value should be (new LocalDateTime(date.getMillis, DateTimeZone.UTC))
       s should be (SoQLFloatingTimestamp(new LocalDateTime(date.getMillis, DateTimeZone.UTC)))
@@ -75,7 +75,7 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLDouble") {
     forAll { (d: Double) =>
-      val s = BigQueryRepFactory(SoQLDouble).SoQL(Seq(d.toString), 0)
+      val s = BigQueryRepFactory(SoQLDouble).SoQL(Seq(d.toString))
       s.typ should be (SoQLDouble)
       s.asInstanceOf[SoQLDouble].value should be (d)
       s should be (SoQLDouble(d))
@@ -85,8 +85,8 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
   test("SoQLPoint") {
     val geomFactory = new GeometryFactory()
     forAll { x: Tuple2[Double, Double] =>
-      val s = BigQueryRepFactory(SoQLPoint).SoQL(Seq(x._1.toString, x._2.toString), 0)
-      val point = geomFactory.createPoint(new Coordinate(x._1, x._2))
+      val s = BigQueryRepFactory(SoQLPoint).SoQL(Seq(x._1.toString, x._2.toString))
+      val point = geomFactory.createPoint(new Coordinate(x._2, x._1))
       s.typ should be (SoQLPoint)
       s.asInstanceOf[SoQLPoint].value should be (point)
       s should be (SoQLPoint(point))
