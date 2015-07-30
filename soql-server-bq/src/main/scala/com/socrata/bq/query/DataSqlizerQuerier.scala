@@ -29,7 +29,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                reqRowCount: Boolean, // TODO: Remove since google bigquery already gives reqRowCount
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV] with BigQueryWriteRep[CT, CV]],
+               bqReps: OrderedMap[ColumnId, BigQueryRep[CT, CV]],
                querier: BigQueryQuerier,
                bqTableName: String) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
@@ -44,7 +44,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     logger.debug(s"QUERY: $queryStr")
 
     val decoders = bqReps.map { case (cid, rep) =>
-      (cid, rep.numColumns, rep.SoQL(_, _))
+      (cid, rep.numColumns, rep.SoQL(_))
     }.toArray
 
     // get rows
@@ -58,14 +58,14 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
   }
 
-  def decodeBigQueryRow(decoders: Array[(ColumnId, Int, ((Seq[String], Int) => CV))])
+  def decodeBigQueryRow(decoders: Array[(ColumnId, Int, ((Seq[String]) => CV))])
     (r: Seq[String]): com.socrata.datacoordinator.Row[CV] = {
 
     val row = new MutableRow[CV]
     var i = 0
 
     decoders.foreach { case (cid, numColumns, bqExtractor) =>
-      row(cid) = bqExtractor(r, i)
+      row(cid) = bqExtractor(r.slice(i, i + numColumns))
       i += numColumns
     }
     row.freeze()
@@ -96,7 +96,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
         if (rowCount.isEmpty) {
           rowCount = Some(page.getTotalRows.longValue())
-          logger.debug(s"Received ${rowCount} rows from BigQuery")
+          logger.debug(s"Received ${rowCount.get} rows from BigQuery")
         }
 
         val rows = page.getRows

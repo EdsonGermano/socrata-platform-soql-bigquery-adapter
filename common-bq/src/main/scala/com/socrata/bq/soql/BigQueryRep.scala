@@ -9,7 +9,7 @@ trait BigQueryRepBase[Type] {
 }
 
 trait BigQueryReadRep[Type, Value] extends BigQueryRepBase[Type] {
-  def SoQL(row : Seq[String], index: Int) : Value
+  def SoQL(row : Seq[String]) : Value
   def numColumns : Int
 }
 

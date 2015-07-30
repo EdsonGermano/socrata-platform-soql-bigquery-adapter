@@ -10,9 +10,9 @@ class DoubleRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "FLOAT"
 
-  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
-    if (row(index) == null) SoQLNull
-    else SoQLDouble(row(index).toDouble)
+  override def SoQL(row: Seq[String]): SoQLValue = {
+    if (row.head == null) SoQLNull
+    else SoQLDouble(row.head.toDouble)
   }
 
   override def jvalue(value: SoQLValue): JValue = {

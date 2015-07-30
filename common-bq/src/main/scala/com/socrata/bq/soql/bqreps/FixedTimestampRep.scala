@@ -1,7 +1,7 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JString, JNull, JValue}
-import com.socrata.bq.soql.{BigQueryRep}
+import com.socrata.bq.soql.BigQueryRep
 import com.socrata.soql.types.{SoQLNull, SoQLValue, SoQLType, SoQLFixedTimestamp}
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
@@ -13,9 +13,9 @@ class FixedTimestampRep extends BigQueryRep[SoQLType, SoQLValue] {
   override val bigqueryType: String = "TIMESTAMP"
 
   // TODO: this requires that the TIMESTAMP is extracted from BigQuery using TIMESTAMP_TO_USEC().
-  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
-    if (row(index) == null) SoQLNull
-    else SoQLFixedTimestamp(new DateTime(row(index).toDouble.toLong / 1000))
+  override def SoQL(row: Seq[String]): SoQLValue = {
+    if (row.head == null) SoQLNull
+    else SoQLFixedTimestamp(new DateTime(row.head.toDouble.toLong / 1000))
 //    else SoQLFixedTimestamp(ISODateTimeFormat.dateTimeParser.withZoneUTC.parseDateTime(value))
   }
 
