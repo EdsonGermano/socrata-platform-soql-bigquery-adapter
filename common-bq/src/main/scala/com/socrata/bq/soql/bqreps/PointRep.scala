@@ -13,7 +13,22 @@ class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "RECORD"
 
-  // Parses points return from big query in the form "long,lat"
+  override def bigqueryFieldSchema() = {
+    new TableFieldSchema()
+        .setType(bigqueryType)
+        .setFields(List(
+            new TableFieldSchema()
+             .setName("long")
+             .setType("FLOAT"),
+            new TableFieldSchema()
+             .setName("lat")
+             .setType("FLOAT")
+        ))
+  }
+
+  // Parses points in the form "{long},{lat}"
+  // Points aren't actually returned as "{long},{lat}" from bigquery, but we encode them to satisfy
+  // BigQueryReadRep's interface. 
   override def SoQL(value: String): SoQLValue = {
     if (value == null) SoQLNull
     else {
