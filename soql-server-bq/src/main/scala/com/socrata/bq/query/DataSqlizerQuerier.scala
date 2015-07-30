@@ -99,7 +99,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
           logger.debug(s"Received ${rowCount} rows from BigQuery")
         }
 
-        rowIt = Some(page.getRows.iterator.asScala)
+        val rows = page.getRows
+        if (rows != null) rowIt = Some(rows.iterator.asScala)
       }
 
       rowIt.exists(_.hasNext)
