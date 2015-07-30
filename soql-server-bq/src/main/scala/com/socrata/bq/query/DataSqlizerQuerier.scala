@@ -12,7 +12,7 @@ import com.socrata.bq.soql._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.typed.ColumnRef
-import com.socrata.soql.types.{SoQLText, SoQLValue}
+import com.socrata.soql.types.{SoQLPoint, SoQLText, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
 import scala.collection.JavaConverters._
@@ -44,7 +44,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     logger.debug(s"QUERY: $queryStr")
 
     val decoders = bqReps.map { case (cid, rep) =>
-      (cid, rep)
+      (cid, rep.numColumns, rep.SoQL(_, _))
     }.toArray
 
     // get rows
@@ -58,36 +58,20 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
   }
 
-  def decodeBigQueryRow(decoders: Array[(ColumnId, BigQueryReadRep[CT, CV] with BigQueryWriteRep[CT, CV])])
-  (r: Seq[TableCell]): com.socrata.datacoordinator.Row[CV] = {
+  def decodeBigQueryRow(decoders: Array[(ColumnId, Int, ((Seq[String], Int) => CV))])
+    (r: Seq[String]): com.socrata.datacoordinator.Row[CV] = {
 
     val row = new MutableRow[CV]
     var i = 0
 
-    decoders.foreach { case (cid, bqExtractor) =>
-      var cell = decodeBigqueryCell(r(i))
-
-      // POINTs take up two Bigquery cells
-      if (bqExtractor.numColumns == 2) {
-        // TODO: Look at the SoQL query schema, or store a numberOfPhysicalColumns field per SoQLType
-        val nextCell = decodeBigqueryCell(r(i+1))
-        cell = s"$nextCell,$cell"
-      }
-
-      row(cid) = bqExtractor.SoQL(cell)
-      i += 1
+    decoders.foreach { case (cid, numColumns, bqExtractor) =>
+      row(cid) = bqExtractor(r, i)
+      i += numColumns
     }
     row.freeze()
   }
-  
-  def decodeBigqueryCell(c: TableCell): String = {
-    c.getV match {
-      case s: String => s
-      case _ => null
-    }
-  }
 
-  class BigQueryResultIt(pageIt: Iterator[GetQueryResultsResponse], toRow: (Seq[TableCell] => Row[CV]))
+  class BigQueryResultIt(pageIt: Iterator[GetQueryResultsResponse], toRow: (Seq[String] => Row[CV]))
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
     var rowCount: Option[Long] = None
@@ -96,7 +80,10 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     override def next(): Row[CV] = {
       if (hasNext) {
-        toRow(rowIt.get.next().getF.asScala.toSeq)
+        toRow(rowIt.get.next().getF.asScala.map(f => f.getV match {
+          case s: String => s
+          case _ => null
+        }).toSeq)
       } else {
         throw new NoSuchElementException("No more data for the BigQueryResultSetIt")
       }
