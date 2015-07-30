@@ -23,4 +23,6 @@ class FixedTimestampRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQue
     if (value == SoQLNull) JNull
     else JString(SoQLFixedTimestamp.StringRep(value.asInstanceOf[SoQLFixedTimestamp].value))
   }
+
+  override def numColumns(): Long = 1
 }

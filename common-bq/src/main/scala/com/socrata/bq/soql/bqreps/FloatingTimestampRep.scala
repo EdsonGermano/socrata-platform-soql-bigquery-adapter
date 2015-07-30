@@ -22,4 +22,6 @@ class FloatingTimestampRep extends BigQueryReadRep[SoQLType, SoQLValue] with Big
     if (value == SoQLNull) JNull
     else JString(SoQLFloatingTimestamp.StringRep(value.asInstanceOf[SoQLFloatingTimestamp].value))
   }
+
+  override def numColumns(): Long = 1
 }

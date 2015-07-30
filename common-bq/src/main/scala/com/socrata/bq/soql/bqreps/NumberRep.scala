@@ -19,4 +19,6 @@ class NumberRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteR
     if (value == SoQLNull) JNull
     else JNumber(value.asInstanceOf[SoQLNumber].value)
   }
+
+  override def numColumns(): Long = 1
 }

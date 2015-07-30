@@ -20,4 +20,6 @@ class BooleanRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWrite
     if (value == SoQLNull) JNull
     else JBoolean(value.asInstanceOf[SoQLBoolean].value)
   }
+
+  override def numColumns(): Long = 1
 }

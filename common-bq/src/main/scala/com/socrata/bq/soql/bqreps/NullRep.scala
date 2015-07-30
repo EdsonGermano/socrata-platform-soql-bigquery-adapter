@@ -14,4 +14,6 @@ class NullRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep
   override def SoQL(value: String): SoQLValue = SoQLNull
 
   override def jvalue(value: SoQLValue): JValue = JNull
+
+  override def numColumns(): Long = 1
 }

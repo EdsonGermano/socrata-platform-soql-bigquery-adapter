@@ -18,4 +18,6 @@ class DateRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep
   }
 
   override def jvalue(value: SoQLValue): JValue = ???
+
+  override def numColumns(): Long = 1
 }

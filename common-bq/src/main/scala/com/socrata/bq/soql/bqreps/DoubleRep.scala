@@ -23,4 +23,6 @@ class DoubleRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteR
       else JNumber(soqlDouble)
     }
   }
+
+  override def numColumns(): Long = 1
 }

@@ -19,4 +19,6 @@ class VersionRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWrite
     if (value == null) JNull
     else JString(value.asInstanceOf[SoQLVersion].value.toString)
   }
+
+  override def numColumns(): Long = 1
 }

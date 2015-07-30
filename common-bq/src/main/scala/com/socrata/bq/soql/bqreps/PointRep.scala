@@ -29,4 +29,6 @@ class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRe
       "long" -> JNumber(value.asInstanceOf[SoQLPoint].value.getX)
     ))
   }
+
+  override def numColumns(): Long = 2
 }

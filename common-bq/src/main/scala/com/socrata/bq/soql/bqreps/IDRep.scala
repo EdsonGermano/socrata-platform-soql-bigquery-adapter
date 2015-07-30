@@ -19,4 +19,6 @@ class IDRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[S
     if (value == null) JNull
     else JString(value.asInstanceOf[SoQLID].value.toString)
   }
+
+  override def numColumns(): Long = 1
 }

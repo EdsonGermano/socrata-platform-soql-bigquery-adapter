@@ -21,4 +21,6 @@ class TextRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep
     if (value == SoQLNull) JNull
     else JString(value.asInstanceOf[SoQLText].value)
   }
+
+  override def numColumns(): Long = 1
 }

@@ -9,6 +9,7 @@ trait BigQueryRep[Type] {
 
 trait BigQueryReadRep[Type, Value] extends BigQueryRep[Type] {
   def SoQL(value : String) : Value
+  def numColumns() : Long
 }
 
 trait BigQueryWriteRep[Type, Value] extends BigQueryRep[Type] {
