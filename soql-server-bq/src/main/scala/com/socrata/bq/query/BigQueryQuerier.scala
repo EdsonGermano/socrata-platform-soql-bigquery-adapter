@@ -19,8 +19,7 @@ class BigQueryQuerier(projectId: String) {
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
 
-    val allPages: Iterator[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime)
-    allPages
+    run(projectId, queryString, batch, waitTime)
 
 //    val result = new ArrayBuffer[mutable.Buffer[String]]() with TotalRowCount
 //

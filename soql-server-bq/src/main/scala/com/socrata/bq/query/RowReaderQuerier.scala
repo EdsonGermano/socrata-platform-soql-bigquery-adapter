@@ -7,7 +7,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
 
-import com.socrata.bq.soql.{BigQueryReadRep, BigQueryWriteRep, BQSql}
+import com.socrata.bq.soql.{BigQueryRep, BQSql}
 import com.socrata.bq.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
@@ -20,7 +20,7 @@ trait RowReaderQuerier[CT, CV] {
             toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-            bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV] with BigQueryWriteRep[CT, CV]],
+            bqReps: OrderedMap[ColumnId, BigQueryRep[CT, CV]],
             projectId: String,
             bqTableName: String):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
