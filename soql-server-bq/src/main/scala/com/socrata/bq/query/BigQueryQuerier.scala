@@ -14,45 +14,46 @@ import scala.collection.mutable.ArrayBuffer
 class BigQueryQuerier(projectId: String) {
 
   @throws(classOf[Exception])
-  def query(queryString: String): ArrayBuffer[mutable.Buffer[String]] with TotalRowCount = {
+  def query(queryString: String): Iterator[GetQueryResultsResponse] = {
     val batch: Boolean = false
     val waitTime: Long = 100
     val curTime: Long = System.currentTimeMillis
 
-    val allPages: Array[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime).toArray
+    val allPages: Iterator[GetQueryResultsResponse] = run(projectId, queryString, batch, waitTime)
+    allPages
 
-    val result = new ArrayBuffer[mutable.Buffer[String]]() with TotalRowCount
-
-    if (!allPages.isEmpty && allPages.head.getTotalRows.longValue > 0) {
-      // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
-      // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
-      // there is no object.
-
-      // Iterate through the schema to see if the user requested a point
-      val schema = allPages.head.getSchema.getFields
-
-      allPages.map(x => x.getRows.map(
-        r => {
-          val row = new mutable.ArrayBuffer[String]()
-          var i = 0
-          r.getF.map(f => f.getV.getClass.getSimpleName match {
-            case "String" => f.getV.toString
-            case _ => null
-          }).foreach(m => {
-            if (schema(i).getName.endsWith("_long")) {
-              // This will throw an ArrayIndexOutOfBounds exception if longitude is ever at index 0
-              // We assume that latitude and longitude are selected together, as (lat, long)
-              row.update(i-1, s"$m,${row.last}")
-            }
-            else row.add(m)
-            i = i + 1
-          })
-          result.add(row)
-        }
-      ))
-    }
-    result.rowCount = allPages.head.getTotalRows.longValue
-    result
+//    val result = new ArrayBuffer[mutable.Buffer[String]]() with TotalRowCount
+//
+//    if (!allPages.isEmpty && allPages.head.getTotalRows.longValue > 0) {
+//      // Because BigQuery's API sucks, null values in the table are represented as java.lang.Object
+//      // objects. If it is of type String, then there is a value present in that TableCell, otherwise,
+//      // there is no object.
+//
+//      // Iterate through the schema to see if the user requested a point
+//      val schema = allPages.head.getSchema.getFields
+//
+//      allPages.map(x => x.getRows.map(
+//        r => {
+//          val row = new mutable.ArrayBuffer[String]()
+//          var i = 0
+//          r.getF.map(f => f.getV.getClass.getSimpleName match {
+//            case "String" => f.getV.toString
+//            case _ => null
+//          }).foreach(m => {
+//            if (schema(i).getName.endsWith("_long")) {
+//              // This will throw an ArrayIndexOutOfBounds exception if longitude is ever at index 0
+//              // We assume that latitude and longitude are selected together, as (lat, long)
+//              row.update(i-1, s"$m,${row.last}")
+//            }
+//            else row.add(m)
+//            i = i + 1
+//          })
+//          result.add(row)
+//        }
+//      ))
+//    }
+//    result.rowCount = allPages.head.getTotalRows.longValue
+//    result
   }
 
   /**

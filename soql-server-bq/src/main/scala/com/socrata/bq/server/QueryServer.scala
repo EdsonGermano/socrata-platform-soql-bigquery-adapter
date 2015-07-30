@@ -234,8 +234,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         // Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
         // associated with each column. This should eventually replace the "qryReps" parameter
         // to querier.query, but for now add it as an additional parameter "bqReps"
-        val repFactory = BigQueryRepFactory
-        val bqReps = qrySchema.mapValues(v => repFactory(v.typ))
+        val bqReps = qrySchema.mapValues(v => BigQueryRepFactory(v.typ))
 
         // Print the schema for this query
         logger.debug("Query schema: ")

@@ -1,5 +1,6 @@
 package com.socrata.bq.query
 
+import com.google.api.services.bigquery.model.{TableCell, TableRow, GetQueryResultsResponse}
 import com.mchange.v2.c3p0.impl.NewProxyPreparedStatement
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
@@ -7,13 +8,14 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.{id, Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.bq.soql.{Escape, BigQueryReadRep, BigQueryRepFactory, BQSql}
+import com.socrata.bq.soql._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.typed.ColumnRef
 import com.socrata.soql.types.{SoQLText, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
+import scala.collection.JavaConverters._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
@@ -27,7 +29,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                reqRowCount: Boolean, // TODO: Remove since google bigquery already gives reqRowCount
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
+               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV] with BigQueryWriteRep[CT, CV]],
                querier: BigQueryQuerier,
                bqTableName: String) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
@@ -42,50 +44,78 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     logger.debug(s"QUERY: $queryStr")
 
     val decoders = bqReps.map { case (cid, rep) =>
-      (cid, rep.SoQL(_))
+      (cid, rep)
     }.toArray
 
     // get rows
     if (analysis.selection.size > 0) {
       val bqResult = querier.query(queryStr)
-      logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
-      new BigQueryResultIt(Option(bqResult.rowCount), bqResult, decodeBigQueryRow(decoders))
+//      logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
+      new BigQueryResultIt(bqResult, decodeBigQueryRow(decoders))
     } else {
       logger.debug("Queried a dataset with no user columns")
       EmptyIt
     }
   }
 
-  def decodeBigQueryRow(decoders: Array[(ColumnId, String => CV)])
-                       (m : mutable.Buffer[String]): com.socrata.datacoordinator.Row[CV] = {
+  def decodeBigQueryRow(decoders: Array[(ColumnId, BigQueryReadRep[CT, CV] with BigQueryWriteRep[CT, CV])])
+  (r: Seq[TableCell]): com.socrata.datacoordinator.Row[CV] = {
 
     val row = new MutableRow[CV]
     var i = 0
 
     decoders.foreach { case (cid, bqExtractor) =>
-        row(cid) = bqExtractor(m(i))
-        i += 1
+      var cell = decodeBigqueryCell(r(i))
+
+      // POINTs take up two Bigquery cells
+      if (bqExtractor.numColumns == 2) {
+        // TODO: Look at the SoQL query schema, or store a numberOfPhysicalColumns field per SoQLType
+        val nextCell = decodeBigqueryCell(r(i+1))
+        cell = s"$nextCell,$cell"
+      }
+
+      row(cid) = bqExtractor.SoQL(cell)
+      i += 1
     }
     row.freeze()
   }
+  
+  def decodeBigqueryCell(c: TableCell): String = {
+    c.getV match {
+      case s: String => s
+      case _ => null
+    }
+  }
 
-  class BigQueryResultIt(val rowCount : Option[Long], rows: ArrayBuffer[mutable.Buffer[String]], toRow: (mutable
-  .Buffer[String] => Row[CV]))
+  class BigQueryResultIt(pageIt: Iterator[GetQueryResultsResponse], toRow: (Seq[TableCell] => Row[CV]))
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
-    private val it: Iterator[mutable.Buffer[String]] = rows.iterator
+    var rowCount: Option[Long] = None
+
+    private var rowIt: Option[Iterator[TableRow]] = None
 
     override def next(): Row[CV] = {
       if (hasNext) {
-        val rowVal = it.next()
-        toRow(rowVal)
+        toRow(rowIt.get.next().getF.asScala.toSeq)
       } else {
-        throw new Exception("No more data for the BigQueryResultSetIt")
+        throw new NoSuchElementException("No more data for the BigQueryResultSetIt")
       }
     }
 
     override def hasNext: Boolean = {
-      it.hasNext
+      if (!rowIt.exists(_.hasNext) && pageIt.hasNext) {
+        val page = pageIt.next()
+        logger.debug("Initializing row iterator")
+
+        if (rowCount.isEmpty) {
+          rowCount = Some(page.getTotalRows.longValue())
+          logger.debug(s"Received ${rowCount} rows from BigQuery")
+        }
+
+        rowIt = Some(page.getRows.iterator.asScala)
+      }
+
+      rowIt.exists(_.hasNext)
     }
 
     override def close(): Unit = {}
@@ -95,12 +125,12 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 object EmptyIt extends CloseableIterator[Nothing] with RowCount {
   val rowCount = Some(0L)
   def hasNext = false
-  def next() = throw new Exception("Called next() on an empty iterator")
+  def next() = throw new NoSuchElementException("Called next() on an empty iterator")
   def close() {}
 }
 
 trait RowCount {
 
-  val rowCount: Option[Long]
+  def rowCount: Option[Long]
 
 }
