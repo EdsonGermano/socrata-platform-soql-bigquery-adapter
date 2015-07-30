@@ -1,11 +1,11 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JNumber, JObject, JNull, JValue}
-import com.socrata.bq.soql.{BigQueryWriteRep, BigQueryReadRep}
+import com.socrata.bq.soql.{BigQueryRep}
 import com.socrata.soql.types.{SoQLNull, SoQLPoint, SoQLValue, SoQLType}
 import com.vividsolutions.jts.geom.{GeometryFactory, Coordinate, Point}
 
-class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] {
+class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   val geomFactory = new GeometryFactory()
 

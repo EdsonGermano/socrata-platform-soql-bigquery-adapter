@@ -6,7 +6,7 @@ import com.typesafe.scalalogging.slf4j.Logging
 
 object BigQueryRepFactory extends Logging {
 
-  private val RepFactory = Map[SoQLType, BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue]](
+  private val RepFactory = Map[SoQLType, BigQueryRep[SoQLType, SoQLValue]](
     SoQLVersion -> new VersionRep,
     SoQLID -> new IDRep,
     SoQLText -> new TextRep,
@@ -19,7 +19,7 @@ object BigQueryRepFactory extends Logging {
     SoQLPoint -> new PointRep
   )
 
-  def apply(givenType : SoQLType) : BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] = {
+  def apply(givenType : SoQLType) : BigQueryRep[SoQLType, SoQLValue] = {
     RepFactory.getOrElse(givenType, new NullRep)
   }
 }

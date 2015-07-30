@@ -1,12 +1,12 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.JValue
-import com.socrata.bq.soql.{BigQueryWriteRep, BigQueryReadRep}
+import com.socrata.bq.soql.{BigQueryRep}
 import com.socrata.soql.types.{SoQLNull, SoQLDate, SoQLValue, SoQLType}
 import org.joda.time.LocalDate
 
 // Broken for now
-class DateRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] {
+class DateRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLDate
 
