@@ -1,9 +1,12 @@
 package com.socrata.bq.soql.bqreps
 
+import collection.JavaConversions._
+
 import com.rojoma.json.v3.ast.{JNumber, JObject, JNull, JValue}
 import com.socrata.bq.soql.{BigQueryRep}
 import com.socrata.soql.types.{SoQLNull, SoQLPoint, SoQLValue, SoQLType}
 import com.vividsolutions.jts.geom.{GeometryFactory, Coordinate, Point}
+import com.google.api.services.bigquery.model.TableFieldSchema
 
 class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
 
