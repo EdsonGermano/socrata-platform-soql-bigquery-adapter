@@ -24,7 +24,7 @@ class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
     val y = row(index+1)
     if (x == null || y == null) SoQLNull
     else {
-      SoQLPoint(geomFactory.createPoint(new Coordinate(x.toDouble, y.toDouble)))
+      SoQLPoint(geomFactory.createPoint(new Coordinate(y.toDouble, x.toDouble)))
     }
   }
 

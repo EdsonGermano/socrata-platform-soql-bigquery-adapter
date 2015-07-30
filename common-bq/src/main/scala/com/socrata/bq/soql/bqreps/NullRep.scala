@@ -9,7 +9,7 @@ class NullRep extends BigQueryRep[SoQLType, SoQLValue] {
   override def repType: SoQLType = SoQLNull
 
   override val bigqueryType: String = "STRING"
-  
+
   override def SoQL(row: Seq[String], index: Int): SoQLValue = SoQLNull
 
   override def jvalue(value: SoQLValue): JValue = JNull
