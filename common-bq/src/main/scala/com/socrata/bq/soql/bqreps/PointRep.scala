@@ -1,11 +1,14 @@
 package com.socrata.bq.soql.bqreps
 
+import collection.JavaConversions._
+
 import com.rojoma.json.v3.ast.{JNumber, JObject, JNull, JValue}
-import com.socrata.bq.soql.{BigQueryWriteRep, BigQueryReadRep}
+import com.socrata.bq.soql.{BigQueryRep}
 import com.socrata.soql.types.{SoQLNull, SoQLPoint, SoQLValue, SoQLType}
 import com.vividsolutions.jts.geom.{GeometryFactory, Coordinate, Point}
+import com.google.api.services.bigquery.model.TableFieldSchema
 
-class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] {
+class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   val geomFactory = new GeometryFactory()
 
@@ -13,7 +16,9 @@ class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRe
 
   override val bigqueryType: String = "RECORD"
 
-  // Parses points return from big query in the form "long,lat"
+  // Parses points in the form "{long},{lat}"
+  // Points aren't actually returned as "{long},{lat}" from bigquery, but we encode them to satisfy
+  // BigQueryReadRep's interface.
   override def SoQL(row: Seq[String], index: Int): SoQLValue = {
     val x = row(index)
     val y = row(index+1)
@@ -21,6 +26,19 @@ class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRe
     else {
       SoQLPoint(geomFactory.createPoint(new Coordinate(x.toDouble, y.toDouble)))
     }
+  }
+
+  override def bigqueryFieldSchema() = {
+    new TableFieldSchema()
+        .setType(bigqueryType)
+        .setFields(List(
+            new TableFieldSchema()
+             .setName("long")
+             .setType("FLOAT"),
+            new TableFieldSchema()
+             .setName("lat")
+             .setType("FLOAT")
+        ))
   }
 
   override def jvalue(value: SoQLValue): JValue = {

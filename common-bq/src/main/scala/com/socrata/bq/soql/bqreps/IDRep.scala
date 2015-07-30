@@ -1,10 +1,10 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JString, JNull, JValue}
-import com.socrata.bq.soql.{BigQueryWriteRep, BigQueryReadRep}
+import com.socrata.bq.soql.{BigQueryRep}
 import com.socrata.soql.types.{SoQLID, SoQLValue, SoQLType}
 
-class IDRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[SoQLType, SoQLValue] {
+class IDRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLID
 
