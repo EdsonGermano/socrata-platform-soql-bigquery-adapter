@@ -10,9 +10,9 @@ class NumberRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteR
 
   override val bigqueryType: String = "FLOAT"
 
-  override def SoQL(value: String): SoQLValue = {
-    if (value == null) SoQLNull
-    else SoQLNumber(new java.math.BigDecimal(value.toDouble))
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
+    if (row(index) == null) SoQLNull
+    else SoQLNumber(new java.math.BigDecimal(row(index).toDouble))
   }
 
   override def jvalue(value: SoQLValue): JValue = {
@@ -20,5 +20,5 @@ class NumberRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteR
     else JNumber(value.asInstanceOf[SoQLNumber].value)
   }
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

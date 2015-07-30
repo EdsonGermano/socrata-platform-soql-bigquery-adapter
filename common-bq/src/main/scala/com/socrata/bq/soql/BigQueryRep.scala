@@ -8,8 +8,8 @@ trait BigQueryRep[Type] {
 }
 
 trait BigQueryReadRep[Type, Value] extends BigQueryRep[Type] {
-  def SoQL(value : String) : Value
-  def numColumns() : Long
+  def SoQL(row : Seq[String], index: Int) : Value
+  def numColumns : Int
 }
 
 trait BigQueryWriteRep[Type, Value] extends BigQueryRep[Type] {

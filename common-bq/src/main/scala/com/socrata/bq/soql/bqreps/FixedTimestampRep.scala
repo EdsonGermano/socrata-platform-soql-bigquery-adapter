@@ -13,9 +13,9 @@ class FixedTimestampRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQue
   override val bigqueryType: String = "TIMESTAMP"
 
   // TODO: this requires that the TIMESTAMP is extracted from BigQuery using TIMESTAMP_TO_USEC().
-  override def SoQL(value: String): SoQLValue = {
-    if (value == null) SoQLNull
-    else SoQLFixedTimestamp(new DateTime(value.toDouble.toLong / 1000))
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
+    if (row(index) == null) SoQLNull
+    else SoQLFixedTimestamp(new DateTime(row(index).toDouble.toLong / 1000))
 //    else SoQLFixedTimestamp(ISODateTimeFormat.dateTimeParser.withZoneUTC.parseDateTime(value))
   }
 
@@ -24,5 +24,5 @@ class FixedTimestampRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQue
     else JString(SoQLFixedTimestamp.StringRep(value.asInstanceOf[SoQLFixedTimestamp].value))
   }
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

@@ -10,10 +10,12 @@ class BooleanRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWrite
 
   override val bigqueryType: String = "BOOLEAN"
 
-  override def SoQL(value: String): SoQLValue = {
-    if (value == null) SoQLNull
-    else if (value == "true") SoQLBoolean(true)
-    else SoQLBoolean(false)
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
+    row(index) match {
+      case null => SoQLNull
+      case "true" => SoQLBoolean(true)
+      case _ => SoQLBoolean(false)
+    }
   }
 
   override def jvalue(value: SoQLValue): JValue = {
@@ -21,5 +23,5 @@ class BooleanRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWrite
     else JBoolean(value.asInstanceOf[SoQLBoolean].value)
   }
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

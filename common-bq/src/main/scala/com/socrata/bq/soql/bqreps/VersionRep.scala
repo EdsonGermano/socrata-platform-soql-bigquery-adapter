@@ -10,9 +10,9 @@ class VersionRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWrite
 
   override val bigqueryType: String = "INTEGER"
 
-  override def SoQL(value: String): SoQLValue = {
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
     // should never be null
-    SoQLVersion(value.toLong)
+    SoQLVersion(row(index).toLong)
   }
 
   override def jvalue(value: SoQLValue): JValue = {
@@ -20,5 +20,5 @@ class VersionRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWrite
     else JString(value.asInstanceOf[SoQLVersion].value.toString)
   }
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

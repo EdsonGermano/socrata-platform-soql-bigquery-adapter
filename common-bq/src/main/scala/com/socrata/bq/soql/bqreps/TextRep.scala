@@ -12,9 +12,9 @@ class TextRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep
 
   override val bigqueryType: String = "STRING"
 
-  override def SoQL(value : String): SoQLValue = {
-    if (value == null) SoQLNull
-    else SoQLText(value)
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
+    if (row(index) == null) SoQLNull
+    else SoQLText(row(index))
   }
 
   override def jvalue(value: SoQLValue): JValue = {
@@ -22,5 +22,5 @@ class TextRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep
     else JString(value.asInstanceOf[SoQLText].value)
   }
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

@@ -10,10 +10,9 @@ class NullRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep
 
   override val bigqueryType: String = "STRING"
 
-  // TODO: this requires that the TIMESTAMP is extracted from BigQuery using TIMESTAMP_TO_USEC().
-  override def SoQL(value: String): SoQLValue = SoQLNull
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = SoQLNull
 
   override def jvalue(value: SoQLValue): JValue = JNull
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

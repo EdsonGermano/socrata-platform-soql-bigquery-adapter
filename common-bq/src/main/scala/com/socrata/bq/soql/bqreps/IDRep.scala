@@ -10,9 +10,9 @@ class IDRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[S
 
   override val bigqueryType: String = "INTEGER"
 
-  override def SoQL(value: String): SoQLValue = {
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
     // should not be null
-    SoQLID(value.toLong)
+    SoQLID(row(index).toLong)
   }
 
   override def jvalue(value: SoQLValue): JValue = {
@@ -20,5 +20,5 @@ class IDRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep[S
     else JString(value.asInstanceOf[SoQLID].value.toString)
   }
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

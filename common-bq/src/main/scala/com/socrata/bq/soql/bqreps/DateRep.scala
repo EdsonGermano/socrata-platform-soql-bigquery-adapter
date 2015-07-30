@@ -12,12 +12,12 @@ class DateRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRep
 
   override val bigqueryType: String = "TIMESTAMP"
 
-  override def SoQL(value: String): SoQLValue = {
-    if (value == null) SoQLNull
-    else SoQLDate(new LocalDate(value.toDouble.toLong))
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
+    if (row(index) == null) SoQLNull
+    else SoQLDate(new LocalDate(row(index).toDouble.toLong))
   }
 
   override def jvalue(value: SoQLValue): JValue = ???
 
-  override def numColumns(): Long = 1
+  override def numColumns: Int = 1
 }

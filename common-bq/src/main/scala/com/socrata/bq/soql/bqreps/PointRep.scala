@@ -14,11 +14,12 @@ class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRe
   override val bigqueryType: String = "RECORD"
 
   // Parses points return from big query in the form "long,lat"
-  override def SoQL(value: String): SoQLValue = {
-    if (value == null) SoQLNull
+  override def SoQL(row: Seq[String], index: Int): SoQLValue = {
+    val x = row(index)
+    val y = row(index+1)
+    if (x == null || y == null) SoQLNull
     else {
-      val point = value.split(",")
-      SoQLPoint(geomFactory.createPoint(new Coordinate(point(0).toDouble, point(1).toDouble)))
+      SoQLPoint(geomFactory.createPoint(new Coordinate(x.toDouble, y.toDouble)))
     }
   }
 
@@ -30,5 +31,5 @@ class PointRep extends BigQueryReadRep[SoQLType, SoQLValue] with BigQueryWriteRe
     ))
   }
 
-  override def numColumns(): Long = 2
+  override def numColumns: Int = 2
 }
