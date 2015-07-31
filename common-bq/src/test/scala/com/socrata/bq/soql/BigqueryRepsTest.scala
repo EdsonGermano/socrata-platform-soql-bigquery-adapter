@@ -42,18 +42,20 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
   test("SoQLNumber") {
     forAll { d : Double =>
       val s = BigQueryRepFactory(SoQLNumber).SoQL(Seq(d.toString))
+      val bd = new java.math.BigDecimal(d.toString)
       s.typ should be (SoQLNumber)
-      s.asInstanceOf[SoQLNumber].value should be (new java.math.BigDecimal(d.toString))
-      s should be (SoQLNumber(new java.math.BigDecimal(d.toString)))
+      s.asInstanceOf[SoQLNumber].value should be (bd)
+      s should be (SoQLNumber(bd))
     }
   }
 
   test("SoQLMoney") {
     forAll { m : Double =>
       val s = BigQueryRepFactory(SoQLMoney).SoQL(Seq(m.toString))
+      val bd = new java.math.BigDecimal(m.toString)
       s.typ should be (SoQLMoney)
-      s.asInstanceOf[SoQLMoney].value should be (new math.BigDecimal(m.toString))
-      s should be (SoQLMoney(new math.BigDecimal(m.toString)))
+      s.asInstanceOf[SoQLMoney].value should be (bd)
+      s should be (SoQLMoney(bd))
     }
   }
 
@@ -78,9 +80,10 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
   test("SoQLFloatingTimestamp") {
     forAll { (date: DateTime) =>
       val s = BigQueryRepFactory(SoQLFloatingTimestamp).SoQL(Seq(date.getMillis + "000"))
+      val ldt = new LocalDateTime(date.getMillis, DateTimeZone.UTC)
       s.typ should be (SoQLFloatingTimestamp)
-      s.asInstanceOf[SoQLFloatingTimestamp].value should be (new LocalDateTime(date.getMillis, DateTimeZone.UTC))
-      s should be (SoQLFloatingTimestamp(new LocalDateTime(date.getMillis, DateTimeZone.UTC)))
+      s.asInstanceOf[SoQLFloatingTimestamp].value should be (ldt)
+      s should be (SoQLFloatingTimestamp(ldt))
     }
   }
 
@@ -90,6 +93,24 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
       s.typ should be (SoQLDouble)
       s.asInstanceOf[SoQLDouble].value should be (d)
       s should be (SoQLDouble(d))
+    }
+  }
+
+  test("SoQLVersion") {
+    forAll { (l: Long) =>
+      val s = BigQueryRepFactory(SoQLVersion).SoQL(Seq(l.toString))
+      s.typ should be (SoQLVersion)
+      s.asInstanceOf[SoQLVersion].value should be (l)
+      s should be (SoQLVersion(l))
+    }
+  }
+
+  test("SoQLID") {
+    forAll { (l: Long) =>
+      val s = BigQueryRepFactory(SoQLID).SoQL(Seq(l.toString))
+      s.typ should be (SoQLID)
+      s.asInstanceOf[SoQLID].value should be (l)
+      s should be (SoQLID(l))
     }
   }
 
