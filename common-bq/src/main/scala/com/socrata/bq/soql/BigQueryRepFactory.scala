@@ -10,7 +10,14 @@ object BigQueryRepFactory extends Logging {
     SoQLVersion -> new VersionRep,
     SoQLID -> new IDRep,
     SoQLText -> new TextRep,
-    SoQLNumber -> new NumberRep,
+    SoQLNumber -> new NumberLikeRep(
+      SoQLNumber(_),
+      _.asInstanceOf[SoQLNumber].value
+    ),
+    SoQLMoney -> new NumberLikeRep(
+      SoQLMoney(_),
+      _.asInstanceOf[SoQLMoney].value
+    ),
     SoQLFixedTimestamp -> new FixedTimestampRep,
     SoQLFloatingTimestamp -> new FloatingTimestampRep,
     SoQLDate -> new DateRep,    // Date may not be working correctly

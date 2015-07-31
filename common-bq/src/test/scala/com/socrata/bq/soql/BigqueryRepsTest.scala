@@ -1,5 +1,7 @@
 package com.socrata.bq.soql
 
+import java.math
+
 import com.socrata.soql.types._
 import com.vividsolutions.jts.geom.{Coordinate, GeometryFactory}
 import org.joda.time.{DateTimeZone, LocalDateTime, DateTime}
@@ -43,6 +45,15 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
       s.typ should be (SoQLNumber)
       s.asInstanceOf[SoQLNumber].value should be (new java.math.BigDecimal(d.toString))
       s should be (SoQLNumber(new java.math.BigDecimal(d.toString)))
+    }
+  }
+
+  test("SoQLMoney") {
+    forAll { m : Double =>
+      val s = BigQueryRepFactory(SoQLMoney).SoQL(Seq(m.toString))
+      s.typ should be (SoQLMoney)
+      s.asInstanceOf[SoQLMoney].value should be (new math.BigDecimal(m.toString))
+      s should be (SoQLMoney(new math.BigDecimal(m.toString)))
     }
   }
 
