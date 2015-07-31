@@ -12,7 +12,7 @@ class NumberRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   override def SoQL(row: Seq[String]): SoQLValue = {
     if (row.head == null) SoQLNull
-    else SoQLNumber(new java.math.BigDecimal(row.head.toDouble))
+    else SoQLNumber(new java.math.BigDecimal(row.head))
   }
 
   override def jvalue(value: SoQLValue): JValue = {

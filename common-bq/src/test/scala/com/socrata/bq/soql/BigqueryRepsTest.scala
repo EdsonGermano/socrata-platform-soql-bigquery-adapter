@@ -41,8 +41,8 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
     forAll { d : Double =>
       val s = BigQueryRepFactory(SoQLNumber).SoQL(Seq(d.toString))
       s.typ should be (SoQLNumber)
-      s.asInstanceOf[SoQLNumber].value should be (new java.math.BigDecimal(d))
-      s should be (SoQLNumber(new java.math.BigDecimal(d)))
+      s.asInstanceOf[SoQLNumber].value should be (new java.math.BigDecimal(d.toString))
+      s should be (SoQLNumber(new java.math.BigDecimal(d.toString)))
     }
   }
 
