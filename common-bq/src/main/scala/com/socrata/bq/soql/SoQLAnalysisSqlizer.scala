@@ -17,6 +17,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   import SqlizerContext._
 
   val underlying = Tuple3(analysis, tableName, allColumnReps)
+  val convToUnderScore = "[)./\\+\\-\\?(*<>]"
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
     sql(false, rep, setParams, ctx, escape)
@@ -69,7 +70,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
       val BQSql(sql, newSetParams) = gb.sql(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
-        val modifiedSQL = sql.replaceAll("[)(*]", "_") // to reference possible aliases in the SELECT stmt
+        val modifiedSQL = sql.replaceAll(convToUnderScore, "_") // to reference possible aliases in the SELECT stmt
       (t2._1 :+ modifiedSQL, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
@@ -83,7 +84,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val BQSql(sql, newSetParams) =
           ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
-        val modifiedSQL = sql.replaceAll("[)(*]", "_") // to reference possible aliases in the SELECT stmt
+        val modifiedSQL = sql.replaceAll(convToUnderScore, "_") // to reference possible aliases in the SELECT stmt
         (t2._1 :+ modifiedSQL, newSetParams)
       }}
 
@@ -127,8 +128,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    */
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.map(sql =>
-      if(sql.matches("\\((sum|avg|count|min|max)\\(.*\\)\\)")) {
-        s"$sql AS ${sql.replaceAll("[)(*]", "_")}"
+      if(sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year).*")) {
+        s"$sql AS ${sql.replaceAll(convToUnderScore, "_")}"
       } else {
         sql
       })

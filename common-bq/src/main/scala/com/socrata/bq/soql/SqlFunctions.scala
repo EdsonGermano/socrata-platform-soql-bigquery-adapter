@@ -73,7 +73,7 @@ object SqlFunctions {
     UnaryPlus -> passthrough,
     UnaryMinus -> formatCall("-%s") _,
     SignedMagnitude10 -> formatCall("sign(%s) * length(floor(abs(%s))::text)", Some(Seq(0,0))),
-    SignedMagnitudeLinear -> formatCall("sign(%s) * floor(abs(%s)/%s + 1)", Some(Seq(0,0,1))),
+    SignedMagnitudeLinear -> formatCall("((%s>0)-(%s<0))*floor(abs(%s)/%s+1)", Some(Seq(0,0,0,1))),
     BinaryPlus -> infix("+") _,
     BinaryMinus -> infix("-") _,
     TimesNumNum -> infix("*") _,
@@ -102,7 +102,7 @@ object SqlFunctions {
 
     TextToNumber -> formatCall("%s::numeric") _,
     TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
-    TextToFloatingTimestamp -> formatCall("%s::timestamp") _, // without time zone
+    TextToFloatingTimestamp -> formatCall("TIMESTAMP_TO_USEC(TIMESTAMP(%s))") _, // without time zone
     TextToMoney -> formatCall("%s::numeric") _,
 
     TextToBool -> formatCall("%s::boolean") _,
