@@ -17,7 +17,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   import SqlizerContext._
 
   val underlying = Tuple3(analysis, tableName, allColumnReps)
-  val convToUnderScore = "[)./\\+\\-\\?(*<>]"
+  val convToUnderScore = "[)./+\\-?(*<>]"
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
     sql(false, rep, setParams, ctx, escape)
