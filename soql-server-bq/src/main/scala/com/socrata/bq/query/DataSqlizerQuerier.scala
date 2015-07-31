@@ -27,7 +27,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
-               reqRowCount: Boolean, // TODO: Remove since google bigquery already gives reqRowCount
+               reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
                bqReps: OrderedMap[ColumnId, BigQueryRep[CT, CV]],
                querier: BigQueryQuerier,
@@ -39,7 +39,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     logger.debug(s"RAW QUERY $bQSql")
 
     val params = bQSql.setParams.toIterator
-    val queryStr = bQSql.sql.toList.map(e => e.toString).map(s => if (s.equals("?")) params.next else s).mkString
+    val queryStr = bQSql.sql.toList.map(e => e.toString).map(s => if (s.equals("?") && params.hasNext) params.next else s).mkString
 
     logger.debug(s"QUERY: $queryStr")
 
@@ -50,7 +50,6 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // get rows
     if (analysis.selection.size > 0) {
       val bqResult = querier.query(queryStr)
-//      logger.debug("Received " + bqResult.rowCount + " rows from BigQuery")
       new BigQueryResultIt(bqResult, decodeBigQueryRow(decoders))
     } else {
       logger.debug("Queried a dataset with no user columns")
