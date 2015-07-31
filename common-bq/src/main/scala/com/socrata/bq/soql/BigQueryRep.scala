@@ -9,7 +9,8 @@ trait BigQueryRepBase[Type] {
 }
 
 trait BigQueryReadRep[Type, Value] extends BigQueryRepBase[Type] {
-  def SoQL(value : String) : Value
+  def SoQL(row : Seq[String]) : Value
+  def numColumns : Int
 }
 
 trait BigQueryWriteRep[Type, Value] extends BigQueryRepBase[Type] {
