@@ -73,6 +73,8 @@ object SqlFunctions {
     UnaryPlus -> passthrough,
     UnaryMinus -> formatCall("-%s") _,
     SignedMagnitude10 -> formatCall("sign(%s) * length(floor(abs(%s))::text)", Some(Seq(0,0))),
+    // The first part of the expression is due to the fact that is no sign(number) function to give back the sign
+    // of a particular number
     SignedMagnitudeLinear -> formatCall("((%s>0)-(%s<0))*floor(abs(%s)/%s+1)", Some(Seq(0,0,0,1))),
     BinaryPlus -> infix("+") _,
     BinaryMinus -> infix("-") _,
@@ -91,9 +93,9 @@ object SqlFunctions {
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
 
-    FloatingTimeStampTruncYmd -> formatCall("day(timestamp(%s))") _,
-    FloatingTimeStampTruncYm -> formatCall("month(timestamp(%s))") _,
-    FloatingTimeStampTruncY -> formatCall("year(timestamp(%s))") _,
+    FloatingTimeStampTruncYmd -> formatCall("(utc_usec_to_day(timestamp(%s)))") _,
+    FloatingTimeStampTruncYm -> formatCall("(utc_usec_to_month(timestamp(%s)))") _,
+    FloatingTimeStampTruncY -> formatCall("(utc_usec_to_year(timestamp(%s)))") _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
