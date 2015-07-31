@@ -116,9 +116,14 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val BQSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
-      val timeStampConv = if (coreExpr.typ.toString.contains("timestamp")) s"TIMESTAMP_TO_USEC($sql)" else sql
-      val pointConv = if (coreExpr.typ.toString.contains("point")) s"${sql}.lat, ${sql}.long" else sql
-      (t2._1 :+ pointConv, newSetParams)
+      val conversion = if (coreExpr.typ.toString.contains("timestamp") && !sql.matches(".*(day|year|month).*"))  {
+        s"TIMESTAMP_TO_USEC($sql)"
+      } else if (coreExpr.typ.toString.contains("point")) {
+        s"${sql}.lat, ${sql}.long"
+      } else {
+        sql
+      }
+      (t2._1 :+ conversion, newSetParams)
     }
   }
 
