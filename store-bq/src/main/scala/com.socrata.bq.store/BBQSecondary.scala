@@ -8,7 +8,6 @@ import java.sql.{Connection, DriverManager, ResultSet}
 import com.rojoma.json.v3.ast._
 import com.rojoma.simplearm.util._
 import com.rojoma.simplearm.Managed
-import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceConfig
@@ -24,8 +23,6 @@ import org.postgresql.ds.PGSimpleDataSource
 
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
-import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.client.http.ByteArrayContent
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
@@ -33,18 +30,24 @@ import com.google.api.services.bigquery.model._
 
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
 
-  private val PROJECT_ID = config.getConfig("bigquery").getString("project-id")
+  private val BQ_PROJECT_ID = config.getConfig("bigquery").getString("project-id")
   private val BQ_DATASET_ID = config.getConfig("bigquery").getString("dataset-id")
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
 
-  val bigquery = {
+  private val bigquery = {
     var credential: GoogleCredential = GoogleCredential.getApplicationDefault()
     if (credential.createScopedRequired) {
       credential = credential.createScoped(BigqueryScopes.all)
     }
     new Bigquery.Builder(TRANSPORT, JSON_FACTORY, credential).setApplicationName("BBQ Secondary").build()
   }
+
+  private val dsInfo = dataSourceFromConfig(new DataSourceConfig(config, "database"))
+
+  private val bigqueryUtils = new BigqueryUtils(dsInfo, BQ_PROJECT_ID)
+
+  private val resyncHandler = new BBQResyncHandler(BQ_PROJECT_ID, BQ_DATASET_ID)
 
   // called on graceful shutdown
   override def shutdown(): Unit = {
@@ -83,49 +86,8 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       cookie: Secondary.Cookie,
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
-    logger.info(s"resyncing ${datasetInfo.internalName}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
-    // make table reference and bigquery metadata
-    val columnNames: ColumnIdMap[String] = bigqueryUtils.makeColumnNameMap(schema)
-    val ref = bigqueryUtils.makeTableReference(BQ_DATASET_ID, datasetInfo, copyInfo)
-    val bqSchema = bigqueryUtils.makeTableSchema(schema, columnNames)
-    val table = new Table()
-            .setTableReference(ref)
-            .setSchema(bqSchema)
-
-    try {
-      bigquery.tables.insert(PROJECT_ID, BQ_DATASET_ID, table).execute()
-      logger.info(s"Inserting into ${ref.getTableId}")
-    } catch {
-      case e: GoogleJsonResponseException => {
-        if (e.getDetails.getCode == 409) {
-          // the table already exists
-          // what should be done here?
-        } else {
-          throw e
-        }
-      }
-    }
-    for { iter <- rows } {
-      val requests =
-        for {
-          row: ColumnIdMap[SoQLValue] <- iter
-        } yield {
-          val rowMap = row.foldLeft(Map[String, JValue]()) { case (map, (id, value)) =>
-            columnNames.get(id) match {
-              case None => map
-              case Some(name) => map + ((name, BigQueryRepFactory(value.typ).jvalue(value)))
-            }
-          }
-          JsonUtil.renderJson(rowMap)
-        }
-
-      for { batch <- requests.grouped(10000) } {
-        val content = new ByteArrayContent("application/octet-stream", batch.mkString("\n").toCharArray.map(_.toByte))
-        val insert = bigquery.jobs.insert(PROJECT_ID, bigqueryUtils.makeLoadJob(ref), content)
-        insert.execute()
-      }
-    }
+    resyncHandler.handle(bigquery, datasetInfo, copyInfo, schema, rows)
     bigqueryUtils.setCopyInfoEntry(datasetId, copyInfo)
     cookie
   }
@@ -162,8 +124,4 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     dataSource.setApplicationName(config.applicationName)
     new DSInfo(dataSource, PostgresCopyIn)
   }
-
-  private val dsInfo = dataSourceFromConfig(new DataSourceConfig(config, "database"))
-
-  private val bigqueryUtils = new BigqueryUtils(dsInfo, PROJECT_ID)
 }
