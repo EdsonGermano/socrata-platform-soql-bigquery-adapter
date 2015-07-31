@@ -28,58 +28,13 @@ import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
 import com.google.api.services.bigquery.model._
 
-class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
+class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase with Logging {
 
   private val COPY_INFO_TABLE = "bbq_copy_info"
 
-  private def parseDatasetId(datasetInternalName: String): Int = {
-    datasetInternalName.split('.')(1).toInt
-  }
-
-  def makeTableName(datasetInternalName: String, copyNumber: Long): String = {
-    datasetInternalName.replace('.', '_') + "_" + copyNumber
-  }
-
-  def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = {
-    new TableReference()
-        .setProjectId(bqProjectId)
-        .setDatasetId(bqDatasetId)
-        .setTableId(makeTableName(datasetInfo.internalName, copyInfo.copyNumber))
-  }
-
-  def makeColumnName(columnId: ColumnId, userColumnId: UserColumnId) = {
-    if (userColumnId.underlying.charAt(0) == ':') {
-      // here we expect userColumnId.underlying to be like `:snake_case_identifier`
-      val name = userColumnId.underlying.substring(1)
-      s"s_${name}_${columnId.underlying}"
-    } else {
-      // here we expect userColumnId.underlying to be like `a2c4-1b3d`
-      val name = userColumnId.underlying.replace('-', '_')
-      s"u_${name}_${columnId.underlying}"
-    }
-  }
-
-  def makeColumnNameMap(soqlSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]]): ColumnIdMap[String] = {
-    soqlSchema.transform( (id, info) => makeColumnName(id, info.id) )
-  }
-
-  def makeTableSchema(schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
-                      columnNameMap: ColumnIdMap[String]): TableSchema = {
-    // map over the values of schema, converting to bigquery TableFieldSchema
-    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) => {
-      BigQueryRepFactory(info.typ)
-          .bigqueryFieldSchema
-          .setName(columnNameMap(id))
-    }}
-    new TableSchema().setFields(fields)
-  }
-
-  def makeLoadJob(ref: TableReference) = {
-    val config = new JobConfigurationLoad()
-            .setDestinationTable(ref)
-            .setSourceFormat("NEWLINE_DELIMITED_JSON")
-    new Job().setConfiguration(new JobConfiguration().setLoad(config))
-  }
+  def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = 
+    super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
+  
 
   def getCopyNumber(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
@@ -127,4 +82,60 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends Logging {
   }
   
   private def getConnection() = dsInfo.dataSource.getConnection()
+}
+
+object BigqueryUtils extends BigqueryUtilsBase with Logging
+
+class BigqueryUtilsBase extends Logging {
+
+  private def parseDatasetId(datasetInternalName: String): Int = {
+    datasetInternalName.split('.')(1).toInt
+  }
+
+  def makeTableName(datasetInternalName: String, copyNumber: Long): String = {
+    datasetInternalName.replace('.', '_') + "_" + copyNumber
+  }
+
+  def makeTableReference(bqProjectId: String, bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = {
+    new TableReference()
+        .setProjectId(bqProjectId)
+        .setDatasetId(bqDatasetId)
+        .setTableId(makeTableName(datasetInfo.internalName, copyInfo.copyNumber))
+  }
+
+  def makeColumnName(columnId: ColumnId, userColumnId: UserColumnId) = {
+    if (userColumnId.underlying.charAt(0) == ':') {
+      // here we expect userColumnId.underlying to be like `:snake_case_identifier`
+      val name = userColumnId.underlying.substring(1)
+      s"s_${name}_${columnId.underlying}"
+    } else {
+      // here we expect userColumnId.underlying to be like `a2c4-1b3d`
+      val name = userColumnId.underlying.replace('-', '_')
+      s"u_${name}_${columnId.underlying}"
+    }
+  }
+
+  def makeColumnNameMap(soqlSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]]): ColumnIdMap[String] = {
+    soqlSchema.transform( (id, info) => makeColumnName(id, info.id) )
+  }
+
+  def makeTableSchema(schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+                      columnNameMap: ColumnIdMap[String]): TableSchema = {
+    // map over the values of schema, converting to bigquery TableFieldSchema
+    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) => {
+      BigQueryRepFactory(info.typ)
+          .bigqueryFieldSchema
+          .setName(columnNameMap(id))
+    }}
+    new TableSchema().setFields(fields)
+  }
+
+  def makeLoadJob(ref: TableReference, truncate: Boolean = false) = {
+    val config = new JobConfigurationLoad()
+            .setDestinationTable(ref)
+            .setSourceFormat("NEWLINE_DELIMITED_JSON")
+    if (truncate) config.setWriteDisposition("TRUNCATE")
+    new Job().setConfiguration(new JobConfiguration().setLoad(config))
+  }
+
 }
