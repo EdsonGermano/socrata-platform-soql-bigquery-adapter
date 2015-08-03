@@ -23,7 +23,8 @@ object BigQueryRepFactory extends Logging {
     SoQLDate -> new DateRep,    // Date may not be working correctly
     SoQLDouble -> new DoubleRep,
     SoQLBoolean -> new BooleanRep,
-    SoQLPoint -> new PointRep
+    SoQLPoint -> new PointRep,
+    SoQLMultiPolygon -> new MultiPolygonRep
   )
 
   def apply(givenType : SoQLType) : BigQueryRep[SoQLType, SoQLValue] = {
