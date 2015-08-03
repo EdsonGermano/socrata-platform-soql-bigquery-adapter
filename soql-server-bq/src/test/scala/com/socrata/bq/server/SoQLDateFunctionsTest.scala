@@ -7,18 +7,18 @@ import scala.collection.mutable.ArrayBuffer
 class SoQLDateFunctionsTest extends QueryTest {
 
   test("extract month") {
-    val expected = ArrayBuffer[mutable.Buffer[String]](mutable.Buffer("10"), mutable.Buffer("2"), mutable.Buffer("10"))
-    queryAndCompare(s"SELECT MONTH(timestamp) FROM ${QueryTest.FULL_TABLE_NAME} LIMIT 3", Some(expected), 3)
+    val expected = ArrayBuffer(mutable.Buffer("1443657600000000"), ArrayBuffer("1454284800000000"), ArrayBuffer("1412121600000000"))
+    queryAndCompare(s"SELECT (utc_usec_to_month(timestamp(timestamp))) FROM ${QueryTest.FULL_TABLE_NAME} LIMIT 3", Some(expected), 3)
   }
 
-  test("extract hour") {
-    val expected = ArrayBuffer[mutable.Buffer[String]](mutable.Buffer("23"), mutable.Buffer("16"), mutable.Buffer("1"))
-    queryAndCompare(s"SELECT HOUR(timestamp) FROM ${QueryTest.FULL_TABLE_NAME} LIMIT 3", Some(expected), 3)
+  test("extract day") {
+    val expected = ArrayBuffer(mutable.Buffer[String]("1443744000000000"), ArrayBuffer("1456531200000000"), ArrayBuffer("1413936000000000"))
+    queryAndCompare(s"SELECT utc_usec_to_day(timestamp(timestamp)) FROM ${QueryTest.FULL_TABLE_NAME} LIMIT 3", Some(expected), 3)
   }
 
-  test("extract minute") {
-    val expected = ArrayBuffer[mutable.Buffer[String]](mutable.Buffer("55"), mutable.Buffer("36"), mutable.Buffer("44"))
-    queryAndCompare(s"SELECT MINUTE(timestamp) FROM ${QueryTest.FULL_TABLE_NAME} LIMIT 3", Some(expected), 3)
+  test("extract year") {
+    val expected = ArrayBuffer(mutable.Buffer[String]("1420070400000000"), ArrayBuffer("1451606400000000"), ArrayBuffer("1388534400000000"))
+    queryAndCompare(s"SELECT utc_usec_to_year(timestamp(timestamp)) FROM ${QueryTest.FULL_TABLE_NAME} LIMIT 3", Some(expected), 3)
   }
 
 }
