@@ -64,7 +64,6 @@ object SqlFunctions {
     StartsWith -> suffixWildCard("like") _,
     Contains -> infix("like") _,  // TODO - Need to add prefix % and suffix % to the 2nd operand.
     Concat -> infix("||") _,
-
     Lower -> nary("lower") _,
     Upper -> nary("upper") _,
 
@@ -103,7 +102,7 @@ object SqlFunctions {
     NumberToMoney -> passthrough,
 
     TextToNumber -> formatCall("%s::numeric") _,
-    TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
+    TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _, // with timezone
     TextToFloatingTimestamp -> formatCall("TIMESTAMP_TO_USEC(TIMESTAMP(%s))") _, // without time zone
     TextToMoney -> formatCall("%s::numeric") _,
 
