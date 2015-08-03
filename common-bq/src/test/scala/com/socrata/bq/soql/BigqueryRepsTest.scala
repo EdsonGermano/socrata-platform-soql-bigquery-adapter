@@ -131,11 +131,11 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
       val s = BigQueryRepFactory(SoQLMultiPolygon).SoQL(Seq(x._1.toString, x._2.toString, x._3.toString, x._4.toString))
       val rect = geomFactory.createMultiPolygon(
         Array(geomFactory.createPolygon(geomFactory.createLinearRing(Array(
-        new Coordinate(x._1, x._2),
-        new Coordinate(x._1, x._4),
-        new Coordinate(x._3, x._4),
-        new Coordinate(x._3, x._2),
-        new Coordinate(x._1, x._2)
+        new Coordinate(x._2, x._1),
+        new Coordinate(x._2, x._3),
+        new Coordinate(x._4, x._3),
+        new Coordinate(x._4, x._1),
+        new Coordinate(x._2, x._1)
       )))))
       s.typ should be (SoQLMultiPolygon)
       s.asInstanceOf[SoQLMultiPolygon].value should be (rect)

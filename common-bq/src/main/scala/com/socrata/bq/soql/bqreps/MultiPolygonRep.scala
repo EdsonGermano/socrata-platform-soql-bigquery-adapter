@@ -25,11 +25,11 @@ class MultiPolygonRep extends BigQueryRep[SoQLType, SoQLValue] {
       val maxLong = row(3).toDouble
       SoQLMultiPolygon(geomFactory.createMultiPolygon(
         Array(geomFactory.createPolygon(geomFactory.createLinearRing(Array(
-          new Coordinate(minLat, minLong),
-          new Coordinate(minLat, maxLong),
-          new Coordinate(maxLat, maxLong),
-          new Coordinate(maxLat, minLong),
-          new Coordinate(minLat, minLong)
+          new Coordinate(minLong, minLat),
+          new Coordinate(minLong, maxLat),
+          new Coordinate(maxLong, maxLat),
+          new Coordinate(maxLong, minLat),
+          new Coordinate(minLong, minLat)
         ))))))
     }
   }
