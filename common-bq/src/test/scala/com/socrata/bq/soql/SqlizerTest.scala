@@ -149,7 +149,6 @@ class SqlizerTest extends FunSuite with Matchers {
       "180 / PI()) * 60 * 1.1515) < ?)")
     setParams should be (Seq("45.535", "45.535", "123.424", "500"))
   }
-
 }
 
 object SqlizerTest {
