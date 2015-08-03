@@ -15,7 +15,10 @@ trait BigQueryReadRep[Type, Value] extends BigQueryRepBase[Type] {
 
 trait BigQueryWriteRep[Type, Value] extends BigQueryRepBase[Type] {
   val bigqueryType : String
-  def bigqueryFieldSchema : TableFieldSchema = new TableFieldSchema().setType(bigqueryType)
+  def bigqueryFieldSchema : TableFieldSchema = bigqueryType match {
+    case "RECORD" => ???
+    case _ => new TableFieldSchema().setType(bigqueryType)
+  }
   def jvalue(value: Value) : JValue
 }
 
