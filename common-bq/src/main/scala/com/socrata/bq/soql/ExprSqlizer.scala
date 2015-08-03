@@ -87,7 +87,13 @@ class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sq
     val BQSql(sql, fnSetParams) = fn(expr, rep, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
-    BQSql(s"($sql)", fnSetParams)
+
+    // However, specifically with extent, we don't want to wrap the call in parenthesis or else BQ errors
+    val funcName = expr.function.function.identity
+    funcName match {
+      case "extent" => BQSql(sql, fnSetParams)
+      case _ => BQSql(s"($sql)", fnSetParams)
+    }
   }
 }
 
