@@ -12,7 +12,7 @@ class MultiPolygonRep extends BigQueryRep[SoQLType, SoQLValue] {
   override def repType: SoQLType = SoQLMultiPolygon
 
   // We are not currently storing MultiPolygons in BigQuery
-  override val bigqueryType: String = "RECORD"
+  override val bigqueryType: String = ???
 
   override def jvalue(value: SoQLValue): JValue = ???
 
