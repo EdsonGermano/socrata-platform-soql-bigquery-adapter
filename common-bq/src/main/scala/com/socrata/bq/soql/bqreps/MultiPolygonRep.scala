@@ -5,13 +5,15 @@ import com.socrata.bq.soql.BigQueryRep
 import com.socrata.soql.types.{SoQLNull, SoQLMultiPolygon, SoQLType, SoQLValue}
 import com.vividsolutions.jts.geom.{Coordinate, GeometryFactory}
 
+// We are not currently storing MultiPolygons in BigQuery, just using the SoQL conversion method
+// in order to properly format results for SQL queries using 'extent' (used on Data Lens pages),
+// which require a bounding box represented by a SoQLMultiPolygon 
 class MultiPolygonRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   private val geomFactory = new GeometryFactory()
 
   override def repType: SoQLType = SoQLMultiPolygon
 
-  // We are not currently storing MultiPolygons in BigQuery
   override val bigqueryType: String = "RECORD"
 
   override def jvalue(value: SoQLValue): JValue = ???
