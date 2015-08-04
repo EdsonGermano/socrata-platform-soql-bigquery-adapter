@@ -70,9 +70,10 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLFixedTimestamp") {
     forAll { (date: DateTime) =>
-      val s = BigQueryRepFactory(SoQLFixedTimestamp).SoQL(Seq(date.getMillis + "000"))
+      val s = BigQueryRepFactory(SoQLFixedTimestamp).SoQL(Seq(date.getMillis + "000", "America/Los_Angeles"))
       s.typ should be (SoQLFixedTimestamp)
       s.asInstanceOf[SoQLFixedTimestamp].value should be (date)
+      s.asInstanceOf[SoQLFixedTimestamp].value.getZone.getID should be ("America/Los_Angeles")
       s should be (SoQLFixedTimestamp(date))
     }
   }
@@ -122,6 +123,24 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
       s.typ should be (SoQLPoint)
       s.asInstanceOf[SoQLPoint].value should be (point)
       s should be (SoQLPoint(point))
+    }
+  }
+
+  test("SoQLMultiPolygon") {
+    val geomFactory = new GeometryFactory()
+    forAll { x: Tuple4[Double, Double, Double, Double] =>
+      val s = BigQueryRepFactory(SoQLMultiPolygon).SoQL(Seq(x._1.toString, x._2.toString, x._3.toString, x._4.toString))
+      val rect = geomFactory.createMultiPolygon(
+        Array(geomFactory.createPolygon(geomFactory.createLinearRing(Array(
+        new Coordinate(x._2, x._1),
+        new Coordinate(x._2, x._3),
+        new Coordinate(x._4, x._3),
+        new Coordinate(x._4, x._1),
+        new Coordinate(x._2, x._1)
+      )))))
+      s.typ should be (SoQLMultiPolygon)
+      s.asInstanceOf[SoQLMultiPolygon].value should be (rect)
+      s should be (SoQLMultiPolygon(rect))
     }
   }
 }
