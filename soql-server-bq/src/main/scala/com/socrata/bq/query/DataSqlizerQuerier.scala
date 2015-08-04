@@ -25,8 +25,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
-               toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
-               toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analsysis, tableName
+               toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
+               toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
                reqRowCount: Boolean,
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
                bqReps: OrderedMap[ColumnId, BigQueryRep[CT, CV]],
