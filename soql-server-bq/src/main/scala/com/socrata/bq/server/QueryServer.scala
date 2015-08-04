@@ -300,11 +300,13 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
 
     val tableName = rollupName match {
       case Some(r) =>
+        logger.debug("RollupName was Some(r)")
         val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r).getOrElse {
           throw new RuntimeException(s"Rollup ${rollupName} not found for copy ${copyCtx.copyInfo} ")
         }
         RollupManager.rollupTableName(rollupInfo, copyCtx.copyInfo.dataVersion)
       case None =>
+        logger.debug("RollupName was None")
         copyCtx.copyInfo.dataTableName
     }
 
