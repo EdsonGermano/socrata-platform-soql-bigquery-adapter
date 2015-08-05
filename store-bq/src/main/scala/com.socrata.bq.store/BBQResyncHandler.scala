@@ -8,7 +8,6 @@ import scala.annotation.tailrec
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
-import com.socrata.datacoordinator.id.{DatasetId, CopyId, ColumnId, UserColumnId}
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.ByteArrayContent

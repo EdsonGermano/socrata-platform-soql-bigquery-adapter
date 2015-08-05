@@ -1,12 +1,8 @@
 package com.socrata.bq.store
 
-import com.socrata.bq.soql.BigQueryRepFactory
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 
 import collection.JavaConversions._
-import java.sql.{Connection, DriverManager, ResultSet}
-
-import com.rojoma.json.v3.ast._
-import com.rojoma.simplearm.util._
 import com.rojoma.simplearm.Managed
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -14,19 +10,14 @@ import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
-import com.socrata.datacoordinator.id.{DatasetId, CopyId, ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
-import com.socrata.thirdparty.typesafeconfig.C3P0Propertizer
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.ds.PGSimpleDataSource
-
-import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
-import com.google.api.services.bigquery.model._
 
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
 
@@ -55,13 +46,24 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def dropDataset(datasetInternalName: String, cookie: Cookie): Unit = {
-    logger.info("dropDataset called")
+    logger.info(s"dropDataset called on $datasetInternalName")
+    val currentCopyNum = currentCopyNumber(datasetInternalName, cookie)
+    logger.info(s"Calling dropCopy on copies 1 through $currentCopyNum")
+    for (i <- 1 to currentCopyNum.toInt) {
+      dropCopy(datasetInternalName, i.toLong, cookie)
+    }
   }
 
   override def snapshots(datasetInternalName: String, cookie: Cookie): Set[Long] = ???
 
   override def dropCopy(datasetInternalName: String, copyNumber: Long, cookie: Cookie): Cookie = {
-    logger.info(s"dropCopy called on ${datasetInternalName}/${copyNumber}")
+    logger.info(s"dropCopy called on $datasetInternalName/$copyNumber")
+    try {
+      bigquery.tables().delete(BQ_PROJECT_ID, BQ_DATASET_ID, bigqueryUtils.makeTableName(datasetInternalName, copyNumber)).execute()
+    } catch {
+      case e: GoogleJsonResponseException if e.getDetails.getCode == 404 =>
+      case _: Throwable => logger.info(s"Encountered an error while deleting $datasetInternalName/$copyNumber")
+    }
     cookie
   }
 

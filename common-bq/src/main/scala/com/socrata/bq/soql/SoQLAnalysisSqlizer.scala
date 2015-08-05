@@ -116,12 +116,17 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val BQSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
-      val conversion = if (coreExpr.typ.toString.contains("timestamp") && !sql.matches(".*(day|year|month).*"))  {
-        s"TIMESTAMP_TO_USEC($sql)"
-      } else if (coreExpr.typ.toString.contains("point")) {
-        s"${sql}.lat, ${sql}.long"
-      } else {
-        sql
+      println("THE CORE EXPRESSION TYPE IS " + coreExpr.typ.toString)
+      val soqlType = coreExpr.typ.toString
+
+      val timeStamp = """.*timestamp""".r
+
+      // match regex is there so that the TIMESTAMP_TO_USEC method does not get called when
+      // the query wants to extract the day, year, or month from the timestamp.
+      val conversion = soqlType match {
+        case timeStamp() => if (!sql.matches(".*(day|year|month).*")) s"TIMESTAMP_TO_USEC($sql)" else sql
+        case "point" => s"$sql.lat, $sql.long"
+        case _ => sql
       }
       (t2._1 :+ conversion, newSetParams)
     }

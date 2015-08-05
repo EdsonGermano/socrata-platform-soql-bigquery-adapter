@@ -61,11 +61,11 @@ class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[Boole
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        BQSql(lit.toString, setParams)
+        BQSql(lit.value.toString, setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(ctx) =>
-        BQSql(lit.toString, setParams)
+        BQSql(lit.value.toString, setParams)
       case _ =>
-        BQSql(ParamPlaceHolder, setParams :+ lit.toString)
+        BQSql(ParamPlaceHolder, setParams :+ lit.value.toString)
     }
   }
 }
