@@ -1,5 +1,6 @@
 package com.socrata.bq.store
 
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.socrata.bq.soql.BigQueryRepFactory
 
 import collection.JavaConversions._
@@ -55,13 +56,24 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def dropDataset(datasetInternalName: String, cookie: Cookie): Unit = {
-    logger.info("dropDataset called")
+    logger.info(s"dropDataset called on $datasetInternalName")
+    val currentCopyNum = currentCopyNumber(datasetInternalName, cookie)
+    logger.info(s"Calling dropCopy on copies 1 through $currentCopyNum")
+    for (i <- 1 until currentCopyNum.toInt + 1) { // Add 1 to make the current copy number inclusive
+      dropCopy(datasetInternalName, i.toLong, cookie)
+    }
   }
 
   override def snapshots(datasetInternalName: String, cookie: Cookie): Set[Long] = ???
 
   override def dropCopy(datasetInternalName: String, copyNumber: Long, cookie: Cookie): Cookie = {
-    logger.info(s"dropCopy called on ${datasetInternalName}/${copyNumber}")
+    logger.info(s"dropCopy called on $datasetInternalName/$copyNumber")
+    try {
+      bigquery.tables().delete(BQ_PROJECT_ID, BQ_DATASET_ID, bigqueryUtils.makeTableName(datasetInternalName, copyNumber)).execute()
+    } catch {
+      case e: GoogleJsonResponseException if e.getDetails.getCode == 404 =>
+      case _: Throwable => logger.info(s"Encountered an error while deleting $datasetInternalName/$copyNumber")
+    }
     cookie
   }
 
