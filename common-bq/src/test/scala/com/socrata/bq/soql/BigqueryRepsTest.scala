@@ -18,7 +18,7 @@ object DateTimes {
     minute <- Gen.choose(0, 59)
     second <- Gen.choose(0, 59)
     ms <- Gen.choose(0, 999)
-  } yield new DateTime(year, month, day, hour, minute, second, ms)
+  } yield new DateTime(year, month, day, hour, minute, second, ms, DateTimeZone.UTC)
 
   implicit val validDt: Arbitrary[DateTime] = Arbitrary(dtGen)
 }
@@ -70,11 +70,11 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("SoQLFixedTimestamp") {
     forAll { (date: DateTime) =>
-      val s = BigQueryRepFactory(SoQLFixedTimestamp).SoQL(Seq(date.getMillis + "000", "America/Los_Angeles"))
+      val s = BigQueryRepFactory(SoQLFixedTimestamp).SoQL(Seq(date.getMillis + "000"))
       s.typ should be (SoQLFixedTimestamp)
       s.asInstanceOf[SoQLFixedTimestamp].value should be (date)
-      s.asInstanceOf[SoQLFixedTimestamp].value.getZone.getID should be ("America/Los_Angeles")
       s should be (SoQLFixedTimestamp(date))
+
     }
   }
 
