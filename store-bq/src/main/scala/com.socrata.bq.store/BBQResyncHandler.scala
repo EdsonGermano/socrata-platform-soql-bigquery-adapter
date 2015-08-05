@@ -1,6 +1,7 @@
 package com.socrata.bq.store
 
 import com.socrata.bq.soql.BigQueryRepFactory
+import scala.collection.JavaConversions._
 
 import com.rojoma.json.v3.ast._
 import com.rojoma.simplearm.Managed
@@ -44,6 +45,12 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
       }
       if (!List("PENDING", "RUNNING", "DONE").contains(state)) {
         logger.info(s"unexpected job state: ${state}")
+      }
+      if (state == "DONE" || newState == "DONE") {
+        if (job.getStatus.getErrorResult != null) {
+          logger.info(s"Final error message: ${job.getStatus.getErrorResult.getMessage}")
+          job.getStatus.getErrors.foreach(e => logger.info(s"Error occurred: ${e.getMessage}"))
+        } else logger.info("No errors occurred")
       }
       state
     }
@@ -101,12 +108,19 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
           batch <- rows.grouped(10000)
         } yield {
           val buffer = batch.mkString("\n").toCharArray.map(_.toByte)
-          buffer.update(buffer.length-1, 100) // corrupt the buffer
+          for (i <- 0 until 2) {
+            buffer.update(i, 100)
+          } // corrupt the buffer
           val content = new ByteArrayContent("application/octet-stream", buffer)
           val job = BigqueryUtils.makeLoadJob(ref)
           val insert = bigquery.jobs.insert(bqProjectId, job, content).setFields("jobReference,status")
-          val jobResponse = insert.execute()
-          new BBQJob(jobResponse)
+          try {
+            val jobResponse = insert.execute()
+            new BBQJob(jobResponse)
+          } catch {
+            case e: java.io.IOException =>
+              throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
+          }
         }
 
       // force jobs to execute
