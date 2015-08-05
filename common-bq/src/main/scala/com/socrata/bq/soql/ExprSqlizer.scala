@@ -58,14 +58,18 @@ class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[Boole
   val underlying = lit
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
-
+    // The underlying literal value returned from query coordinator is in the form:
+    // "TRUE :: boolean"
+    // However, Google BQ is not happy with that, so convert the literal into a string, split on the space, and get
+    // the first word, either "TRUE" or "FALSE" to set the parameter.
+    val reformattedLit = lit.toString.split(" ").head
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        BQSql(lit.toString, setParams)
+        BQSql(reformattedLit, setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(ctx) =>
-        BQSql(lit.toString, setParams)
+        BQSql(reformattedLit, setParams)
       case _ =>
-        BQSql(ParamPlaceHolder, setParams :+ lit.toString)
+        BQSql(ParamPlaceHolder, setParams :+ reformattedLit)
     }
   }
 }

@@ -106,8 +106,8 @@ object SqlFunctions {
     TextToFloatingTimestamp -> formatCall("TIMESTAMP_TO_USEC(TIMESTAMP(%s))") _, // without time zone
     TextToMoney -> formatCall("%s::numeric") _,
 
-    TextToBool -> formatCall("%s::boolean") _,
-    BoolToText -> formatCall("%s::varchar") _,
+    TextToBool -> formatCall("%s") _,
+    BoolToText -> formatCall("%s") _,
 
     TextToPoint -> formatCall("ST_GeomFromText(%s, 4326)") _,
     TextToMultiPoint -> formatCall("ST_GeomFromText(%s, 4326)") _,
