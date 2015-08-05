@@ -49,7 +49,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     logger.info(s"dropDataset called on $datasetInternalName")
     val currentCopyNum = currentCopyNumber(datasetInternalName, cookie)
     logger.info(s"Calling dropCopy on copies 1 through $currentCopyNum")
-    for (i <- 1 until currentCopyNum.toInt + 1) { // Add 1 to make the current copy number inclusive
+    for (i <- 1 to currentCopyNum.toInt) {
       dropCopy(datasetInternalName, i.toLong, cookie)
     }
   }
