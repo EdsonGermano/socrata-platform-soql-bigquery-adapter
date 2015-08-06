@@ -65,9 +65,9 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
         case e: GoogleJsonResponseException if acceptableResponseCodes contains e.getDetails.getCode =>
           return None
         case ioError: java.io.IOException =>
-          logger.error(s"IOException occurred while executing a request to bigquery. Retrying in 500ms.")
+          logger.error(s"IOException occurred while executing a request to bigquery. Retrying in 5000ms.")
       }
-      Thread.sleep(500)
+      Thread.sleep(5000)
       loop()
     }
     loop()
