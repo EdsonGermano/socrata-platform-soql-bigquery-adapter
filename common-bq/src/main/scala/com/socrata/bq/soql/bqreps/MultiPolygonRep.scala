@@ -1,24 +1,33 @@
 package com.socrata.bq.soql.bqreps
 
-import com.rojoma.json.v3.ast.JValue
+import com.rojoma.json.v3.ast.{JString, JValue}
 import com.socrata.bq.soql.BigQueryRep
-import com.socrata.soql.types.{SoQLNull, SoQLMultiPolygon, SoQLType, SoQLValue}
-import com.vividsolutions.jts.geom.{Coordinate, GeometryFactory}
+import com.socrata.soql.types._
+import com.vividsolutions.jts.geom.{MultiPolygon, Coordinate, GeometryFactory}
+import com.vividsolutions.jts.io.{WKBReader, WKBWriter}
+import javax.xml.bind.DatatypeConverter.{parseBase64Binary, printBase64Binary}
 
-// We are not currently storing MultiPolygons in BigQuery, just using the SoQL conversion method
-// in order to properly format results for SQL queries using 'extent' (used on Data Lens pages),
-// which require a bounding box represented by a SoQLMultiPolygon 
 class MultiPolygonRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   private val geomFactory = new GeometryFactory()
+  private val wkbWriter = new WKBWriter()
+  private val wkbReader = new WKBReader()
 
   override def repType: SoQLType = SoQLMultiPolygon
 
-  override val bigqueryType: String = "RECORD"
+  override val bigqueryType: String = "STRING"
 
-  override def jvalue(value: SoQLValue): JValue = ???
+  override def jvalue(value: SoQLValue): JValue = {
+    val bytes = wkbWriter.write(value.asInstanceOf[SoQLMultiPolygon].value)
+    JString(printBase64Binary(bytes))
+  }
 
   override def SoQL(row: Seq[String]): SoQLValue = {
+    SoQLMultiPolygon(wkbReader.read(parseBase64Binary(row.head)).asInstanceOf[MultiPolygon])
+  }
+
+  // TODO: Add this to a bounding box rep, or use as a special case function for when "EXTENT" sql function is called
+  def boundingBox(row: Seq[String]): SoQLValue = {
     if (row(0) == null || row(1) == null || row(2) == null || row(3) == null) SoQLNull
     else {
       val minLat = row(0).toDouble
@@ -36,5 +45,5 @@ class MultiPolygonRep extends BigQueryRep[SoQLType, SoQLValue] {
     }
   }
 
-  override def numColumns: Int = 4
+  override def numColumns: Int = 1
 }
