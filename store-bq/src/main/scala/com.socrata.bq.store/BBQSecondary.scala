@@ -38,7 +38,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   private val bigqueryUtils = new BigqueryUtils(dsInfo, BQ_PROJECT_ID)
 
-  private val resyncHandler = new BBQResyncHandler(BQ_PROJECT_ID, BQ_DATASET_ID)
+  private val resyncHandler = new BBQResyncHandler(bigquery, BQ_PROJECT_ID, BQ_DATASET_ID)
 
   // called on graceful shutdown
   override def shutdown(): Unit = {
@@ -89,7 +89,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
     val datasetId = parseDatasetId(datasetInfo.internalName)
-    resyncHandler.handle(bigquery, datasetInfo, copyInfo, schema, rows)
+    resyncHandler.handle(datasetInfo, copyInfo, schema, rows)
     bigqueryUtils.setCopyInfoEntry(datasetId, copyInfo)
     cookie
   }
