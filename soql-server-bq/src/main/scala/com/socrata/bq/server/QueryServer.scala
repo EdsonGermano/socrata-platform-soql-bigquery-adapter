@@ -4,6 +4,8 @@ import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
+import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
+
 import scala.language.existentials
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.JsonUtil
@@ -35,13 +37,14 @@ import com.socrata.bq.Schema._
 import com.socrata.bq.query.{EmptyIt, DataSqlizerQuerier, RowCount, RowReaderQuerier}
 import com.socrata.bq.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.bq.soql._
+import com.socrata.bq.soql.bqreps.MultiPolygonRep
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 import com.socrata.bq.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{TypeName, ColumnName}
-import com.socrata.soql.typed.CoreExpr
+import com.socrata.soql.typed.{FunctionCall, CoreExpr}
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
@@ -226,20 +229,15 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-        val qrySchema = querySchema(pgu, analysis, latestCopy)
-        val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
+        val bqReps = generateReps(analysis)
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
+        val qrySchema = querySchema(analysis, latestCopy)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
-
-        // Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
-        // associated with each column. This should eventually replace the "qryReps" parameter
-        // to querier.query, but for now add it as an additional parameter "bqReps"
-        val bqReps = qrySchema.mapValues(v => BigQueryRepFactory(v.typ))
 
         // Print the schema for this query
         logger.debug("Query schema: ")
-        qrySchema.foreach { case (k, v) =>
-          logger.debug(s"${k.toString}: ${v.typ.toString}")
+        bqReps.foreach { case (k, v) =>
+          logger.debug(s"${k.toString}: ${v.repType.toString}")
         }
 
         // Use the Utils to request the appropriate table name for the given internal dataset name
@@ -258,7 +256,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
               (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
                 (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
               rowCount,
-              qryReps,
               bqReps,
               config.bigqueryProjectId,
               bqTableName)
@@ -317,22 +314,45 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
   }
 
   /**
-   * @param pgu
+   * @param analysis parsed soql
+   * @return Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
+   *         associated with each column.
+   */
+  // TODO: Handle expressions and column aliases.
+  private def generateReps(analysis: SoQLAnalysis[UserColumnId, SoQLType]):
+                  OrderedMap[ColumnId, BigQueryReadRep[SoQLType, SoQLValue]] = {
+
+    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, BigQueryReadRep[SoQLType, SoQLValue]]) { (map, entry) =>
+      entry match {
+        case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
+          val cid = new ColumnId(map.size + 1)
+          val bqRep = coreExpr match {
+            case FunctionCall(function, _) if function.function.identity == "extent" => {
+              logger.info("Bounding box rep")
+              new BoundingBoxRep
+            }
+            case otherExpr => BigQueryRepFactory(otherExpr.typ)
+          }
+          map + (cid -> bqRep)
+      }
+    }
+  }
+
+  /**
    * @param analysis parsed soql
    * @param latest
    * @return a schema for the selected columns
    */
   // TODO: Handle expressions and column aliases.
-  private def querySchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                  analysis: SoQLAnalysis[UserColumnId, SoQLType],
-                  latest: CopyInfo):
-                  OrderedMap[ColumnId, ColumnInfo[pgu.CT]] = {
+  private def querySchema(analysis: SoQLAnalysis[UserColumnId, SoQLType],
+                          latest: CopyInfo):
+  OrderedMap[ColumnId, ColumnInfo[SoQLType]] = {
 
-    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, ColumnInfo[pgu.CT]]) { (map, entry) =>
+    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, ColumnInfo[SoQLType]]) { (map, entry) =>
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
           val cid = new ColumnId(map.size + 1)
-          val cinfo = new ColumnInfo[pgu.CT](
+          val cinfo = new ColumnInfo[SoQLType](
             latest,
             cid,
             new UserColumnId(columnName.name),
