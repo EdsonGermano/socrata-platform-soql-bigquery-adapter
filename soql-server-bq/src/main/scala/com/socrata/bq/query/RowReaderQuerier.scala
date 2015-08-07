@@ -7,7 +7,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
 
-import com.socrata.bq.soql.{BigQueryRep, BQSql}
+import com.socrata.bq.soql.{BigQueryReadRep, BigQueryRep, BQSql}
 import com.socrata.bq.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
@@ -19,14 +19,13 @@ trait RowReaderQuerier[CT, CV] {
             toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql,
             toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
             reqRowCount: Boolean,
-            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-            bqReps: OrderedMap[ColumnId, BigQueryRep[CT, CV]],
+            bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
             projectId: String,
             bqTableName: String):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
 
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
-    val resultIter = sqlizerq.query(connection, analysis, toSql, toRowCountSql, reqRowCount, querySchema, bqReps, new BigQueryQuerier(projectId), bqTableName)
+    val resultIter = sqlizerq.query(connection, analysis, toSql, toRowCountSql, reqRowCount, bqReps, new BigQueryQuerier(projectId), bqTableName)
     managed(resultIter)
   }
 

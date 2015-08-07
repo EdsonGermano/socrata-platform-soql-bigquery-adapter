@@ -107,7 +107,7 @@ object CJSONWriter {
     }
   }
 
-  private def writeSchema(cjsonSortedSchema:Seq[ColumnInfo[SoQLType]], writer: Writer) {
+  private def writeSchema(cjsonSortedSchema: Seq[ColumnInfo[SoQLType]], writer: Writer) {
     val sel = cjsonSortedSchema.map { colInfo => Field(colInfo.userColumnId.underlying, colInfo.typ.toString()) }.toArray
     writer.write("\n ,\"schema\":")
     JsonUtil.writeJson(writer, sel)
