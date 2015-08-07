@@ -116,7 +116,6 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val BQSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
-      println("THE CORE EXPRESSION TYPE IS " + coreExpr.typ.toString)
       val soqlType = coreExpr.typ.toString
 
       val timeStamp = """.*timestamp""".r
