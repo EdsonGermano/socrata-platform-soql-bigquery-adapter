@@ -84,7 +84,15 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val BQSql(sql, newSetParams) =
           ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
-        val modifiedSQL = sql.replaceAll(convToUnderScore, "_") // to reference possible aliases in the SELECT stmt
+        val modifiedSQL = sql.contains("desc") match {
+          case true => // need to remove the last instance of the _ from the removal of spaces if DESC is in the
+                       // the SQL statement
+            val modifiedSQL = sql.replaceAll(convToUnderScore, "_")
+            val index = modifiedSQL.lastIndexOf("_")
+            new StringBuilder(modifiedSQL).replace(index, index + 1, " ").toString
+          case false => sql.replaceAll(convToUnderScore, "_")
+        }
+          sql.replaceAll(convToUnderScore, "_") // to reference possible aliases in the SELECT stmt
         (t2._1 :+ modifiedSQL, newSetParams)
       }}
 
