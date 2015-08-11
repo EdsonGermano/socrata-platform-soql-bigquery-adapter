@@ -4,6 +4,7 @@ import com.rojoma.json.v3.ast._
 import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, JsonUtil}
 import com.rojoma.simplearm.util._
+import com.socrata.bq.query.RowCount
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, ColumnInfo}
 import com.socrata.datacoordinator.util.CloseableIterator
@@ -45,42 +46,32 @@ object CJSONWriter {
 
   def writeCJson(datasetInfo: DatasetInfo,
                  qrySchema: OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
-                 rowData:CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]],
+                 rows: CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]] with RowCount,
                  reqRowCount: Boolean,
-                 givenRowCount: Option[Long],
                  dataVersion: Long,
                  lastModified: DateTime,
-                 locale: String = "en_US") = (r:HttpServletResponse) => {
+                 locale: String = "en_US") = (r: HttpServletResponse) => {
 
     r.setContentType("application/json")
     r.setCharacterEncoding(utf8EncodingName)
     val os = r.getOutputStream
     val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo)
 
-    val (rowCount, rows) = givenRowCount match {
-      case None if reqRowCount =>
-        logger.warn("FIXME: I am brute forcing row count!")
-        val consumedRowData = rowData.toSeq
-        val it = consumedRowData.iterator
-        val cit = new CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]] {
-          def next() = { it.next() }
-          def hasNext = it.hasNext
-          def close() = { }
-        }
-        (Some(consumedRowData.size.toLong), cit)
-      case rc =>
-        (rc, rowData)
+    // Grab the first row in order to get the RowCount (only accessible after beginning to iterate over
+    // the BQ results)
+    val firstRow = rows.hasNext match {
+      case true => Some(rows.next())
+      case false => None
     }
+    val rowCount = rows.rowCount
+    assert(rowCount.isDefined)
 
+    // Begin writing the JSON
     using(new OutputStreamWriter(os, utf8EncodingName)) { (writer: OutputStreamWriter) =>
-      writer.write("[{")
-      rowCount.map { rc =>
-        writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString))
-      }
-      writer.write("\"data_version\":%d\n,".format(dataVersion))
-      writer.write("\"last_modified\":\"%s\"\n,".format(dateTimeFormat.print(lastModified)))
-      writer.write("\"locale\":\"%s\"".format(locale))
 
+      writer.write("[")
+
+      // Grab the schema, JSON reps, and BQ reps
       val cjsonSortedSchema = qrySchema.values.toSeq.sortWith(_.userColumnId.underlying < _.userColumnId.underlying)
       val qryColumnIdToUserColumnIdMap = qrySchema.foldLeft(Map.empty[UserColumnId, ColumnId]) { (map, entry) =>
         val (cid, cInfo) = entry
@@ -89,9 +80,31 @@ object CJSONWriter {
       val reps = cjsonSortedSchema.map { cinfo => jsonReps(cinfo.typ) }.toArray
       val cids = cjsonSortedSchema.map { cinfo => qryColumnIdToUserColumnIdMap(cinfo.userColumnId) }.toArray
 
-      writeSchema(cjsonSortedSchema, writer)
-      writer.write("\n }")
+      // Write row count, schema, data-version, etc. to the JSON
+      CompactJsonWriter.toWriter(writer, JObject(Map(
+        "approximate_row_count" -> JNumber(rowCount.get),
+        "data_version" -> JNumber(dataVersion),
+        "last_modified" -> JString(dateTimeFormat.print(lastModified)),
+        "locale" -> JString(locale),
+        "schema" -> JArray(cjsonSortedSchema.map{colInfo => JObject(Map(
+          "c" -> JString(colInfo.userColumnId.underlying),
+          "t" -> JString(colInfo.typ.toString())
+        ))
+        })
+      )))
 
+      // Print the rows to the JSON
+      // First, iterate over the first row that we had to grab to get the RowCount
+      if (firstRow.isDefined) {
+        var firstResult = new Array[JValue](firstRow.get.size)
+        for (i <- 0 until firstResult.length) {
+          firstResult(i) = reps(i).toJValue(firstRow.get(cids(i)))
+        }
+        writer.write(",\n")
+        CompactJsonWriter.toWriter(writer, JArray(firstResult))
+      }
+
+      // The rest of the rows
       for (row <- rows) {
         assert(row.size == cids.length)
         var result = new Array[JValue](row.size)
@@ -99,9 +112,11 @@ object CJSONWriter {
         for (i <- 0 until result.length) {
           result(i) = reps(i).toJValue(row(cids(i)))
         }
-        writer.write("\n,")
+        writer.write(",\n")
         CompactJsonWriter.toWriter(writer, JArray(result))
       }
+
+      // End JSON
       writer.write("\n]\n")
       writer.flush()
     }
