@@ -17,7 +17,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   import SqlizerContext._
 
   val underlying = Tuple3(analysis, tableName, allColumnReps)
-  val convToUnderScore = "[)./+\\-?(*<>]"
+  val convToUnderScore = "[)./+\\-?(*<> ]"
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
     sql(false, rep, setParams, ctx, escape)
@@ -137,7 +137,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    */
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.map(sql =>
-      if(sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year).*")) {
+      if(sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast).*")) {
         s"$sql AS ${sql.replaceAll(convToUnderScore, "_")}"
       } else {
         sql
