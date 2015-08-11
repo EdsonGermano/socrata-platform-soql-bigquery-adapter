@@ -96,8 +96,8 @@ object CJSONWriter {
       // Print the rows to the JSON
       // First, iterate over the first row that we had to grab to get the RowCount
       if (firstRow.isDefined) {
-        var firstResult = new Array[JValue](firstRow.get.size)
-        for (i <- 0 until firstResult.length) {
+        val firstResult = new Array[JValue](firstRow.get.size)
+        for (i <- firstResult.indices) {
           firstResult(i) = reps(i).toJValue(firstRow.get(cids(i)))
         }
         writer.write(",\n")
@@ -107,9 +107,9 @@ object CJSONWriter {
       // The rest of the rows
       for (row <- rows) {
         assert(row.size == cids.length)
-        var result = new Array[JValue](row.size)
+        val result = new Array[JValue](row.size)
 
-        for (i <- 0 until result.length) {
+        for (i <- result.indices) {
           result(i) = reps(i).toJValue(row(cids(i)))
         }
         writer.write(",\n")
