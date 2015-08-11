@@ -71,9 +71,9 @@ object SqlFunctions {
     // http://beta.dev.socrata.com/docs/datatypes/numeric.html
     UnaryPlus -> passthrough,
     UnaryMinus -> formatCall("-%s") _,
-    SignedMagnitude10 -> formatCall("sign(%s) * length(floor(abs(%s))::text)", Some(Seq(0,0))),
-    // The first part of the expression is due to the fact that is no sign(number) function to give back the sign
-    // of a particular number
+    // (%s>0)-(%s<0) computes the sign of the number, either -1, 0, or 1, to be preserved after ABS and FLOOR are called
+    SignedMagnitude10 -> formatCall("((%s>0)-(%s<0)) * " +
+      "length(cast((cast(floor(abs(%s))as integer)) as string))", Some(Seq(0,0,0))),
     SignedMagnitudeLinear -> formatCall("((%s>0)-(%s<0))*floor(abs(%s)/%s+1)", Some(Seq(0,0,0,1))),
     BinaryPlus -> infix("+") _,
     BinaryMinus -> infix("-") _,
