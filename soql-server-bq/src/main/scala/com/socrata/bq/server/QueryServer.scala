@@ -187,7 +187,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
                   copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
                   for (r <- results) yield {
-                    CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
+                    CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
                   }
                 case NotModified(etags) =>
                   notModified(etags)(resp)
