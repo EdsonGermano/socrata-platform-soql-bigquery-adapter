@@ -18,7 +18,7 @@ import com.rojoma.simplearm.Managed
 import com.rojoma.json.v3.util.JsonUtil
 import com.typesafe.scalalogging.slf4j.Logging
 
-class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: String) extends Logging {
+  class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: String) extends Logging {
 
   class BBQJob(job: Job) {
     val jobId = job.getJobReference.getJobId
@@ -36,7 +36,7 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
           if (job.getStatus.getErrorResult != null) {
             logger.info(s"Final error message: ${job.getStatus.getErrorResult.getMessage}")
             job.getStatus.getErrors.foreach(e => logger.info(s"Error occurred: ${e.getMessage}"))
-            throw new ResyncSecondaryException("Failed to load some data into bigquery")
+            //throw new ResyncSecondaryException("Failed to load some data into bigquery")
           }
         }
         if (!List("PENDING", "RUNNING", "DONE").contains(state)) {
@@ -120,10 +120,13 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
             jobResponse = insert.execute()
           } catch {
             // Assume any exception is ephemeral.
-            case e: java.io.IOException =>
-              throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
+            case e: java.io.IOException => logger.info("LOST OF SET OF 10000 ROWS UPDATED")
+//              throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
           }
-          new BBQJob(jobResponse)
+          jobResponse match {
+            case null => null
+            case _ => new BBQJob(jobResponse)
+          }
         }
 
       // force jobs to execute
@@ -131,9 +134,12 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
 
       while (jobs.length > 0) {
         // does this thread sleep block other workers?
-        Thread.sleep(1000)
+        Thread.sleep(100)
         jobs = jobs.filter { job =>
-          job.checkStatus != "DONE"
+          if (job != null) {
+            job.checkStatus != "DONE"
+          }
+          false
         }
       }
       logger.debug("done with all jobs")
