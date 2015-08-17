@@ -53,7 +53,7 @@ import com.typesafe.scalalogging.slf4j.Logging
 
     /**
      * Executes the request. If the request fails from a generic java.io.IOException, assumes a network error occurred,
-     * and reissues the request after 500ms.
+     * and reissues the request after 5000ms.
      * @return Some response, if the execution succeeds or eventually succeeds. None if it fails with an acceptalbe
      *         response code.
      */
@@ -79,17 +79,19 @@ import com.typesafe.scalalogging.slf4j.Logging
                managedRowIterator: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Unit = {
       logger.info(s"resyncing ${datasetInfo.internalName}")
       val datasetId = parseDatasetId(datasetInfo.internalName)
-      // make table reference and bigquery metadata
+      // Make table reference and bigquery metadata
       val columnNames: ColumnIdMap[String] = BigqueryUtils.makeColumnNameMap(schema)
       val ref = BigqueryUtils.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
       val bqSchema = BigqueryUtils.makeTableSchema(schema, columnNames)
       val table = new Table()
         .setTableReference(ref)
         .setSchema(bqSchema)
-      // delete the table, just in case it already exists (from a failed resync, perhaps)
+
+      // Delete the table, just in case it already exists (from a failed resync, perhaps)
       val delete = bigquery.tables.delete(bqProjectId, bqDatasetId, ref.getTableId)
       executeAndAcceptResponseCodes(delete, 404)
-      // create the table
+
+      // Create the table
       val insert = bigquery.tables.insert(bqProjectId, bqDatasetId, table)
       executeAndAcceptResponseCodes(insert, 400)
       logger.info(s"Inserting into ${ref.getTableId}")
@@ -121,8 +123,8 @@ import com.typesafe.scalalogging.slf4j.Logging
                 val insert = bigquery.jobs.insert(bqProjectId, job, content).setFields("jobReference,status")
                 jobResponse = insert.execute()
               } catch {
-                // Assume any exception is ephemeral.
-                case e: java.io.IOException => logger.debug("Encountered a network exception, ignoring...")
+                // Assume that network-related exceptions are ephemeral.
+                case e: java.io.IOException => logger.info("Encountered a network exception, retrying...")
                 case _ => throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
               }
             }
@@ -132,11 +134,10 @@ import com.typesafe.scalalogging.slf4j.Logging
             }
           }
 
-        // force jobs to execute
+        // Check the status of all jobs for completion
         var jobs = jobIterator.toList
-
         while (jobs.nonEmpty) {
-          // does this thread sleep block other workers?
+          // TODO: does this thread sleep block other workers?
           Thread.sleep(100)
           jobs = jobs.filter { job =>
             if (job != null) {
@@ -144,7 +145,8 @@ import com.typesafe.scalalogging.slf4j.Logging
                 try {
                   job.checkStatus != "DONE"
                 } catch {
-                  case e: java.io.IOException => logger.info(s"Getting job status for ${job.jobId} failed. Retrying... (attempt ${i + 1})")
+                  case e: java.io.IOException =>
+                    logger.info(s"Getting job status for ${job.jobId} failed. Retrying... (attempt ${i + 1})")
                 }
               }
             }
