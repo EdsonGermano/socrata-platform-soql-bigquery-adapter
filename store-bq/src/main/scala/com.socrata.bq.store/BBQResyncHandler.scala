@@ -23,14 +23,14 @@ import com.typesafe.scalalogging.slf4j.Logging
   class BBQJob(job: Job) {
     val jobId = job.getJobReference.getJobId
     var state = job.getStatus.getState
-    logger.debug(s"new bigquery job ${jobId} with state ${state}")
+    logger.debug(s"new bigquery job $jobId with state $state")
 
     def checkStatus: String = {
       val job = bigquery.jobs.get(bqProjectId, jobId).setFields("status").execute()
       val newState = job.getStatus.getState
       if (newState != state) {
         state = newState
-        logger.debug(s"new state for job ${jobId}: ${state}")
+        logger.debug(s"new state for job $jobId: $state")
         if (state == "DONE") {
           // Now that the job is done, we need to handle any errors that may have occurred.
           if (job.getStatus.getErrorResult != null) {
@@ -40,7 +40,7 @@ import com.typesafe.scalalogging.slf4j.Logging
           }
         }
         if (!List("PENDING", "RUNNING", "DONE").contains(state)) {
-          logger.info(s"unexpected job state: ${state}")
+          logger.info(s"unexpected job state: $state")
         }
       }
       state
@@ -108,20 +108,26 @@ import com.typesafe.scalalogging.slf4j.Logging
           JsonUtil.renderJson(rowMap)
         }
 
+      val batchSize = 250000
       val jobIterator =
         for {
-          batch <- rows.grouped(10000)
+          batch <- rows.grouped(batchSize)
         } yield {
-          val content = new ByteArrayContent("application/octet-stream", batch.mkString("\n").toCharArray.map(_.toByte))
-          val job = BigqueryUtils.makeLoadJob(ref)
-          val insert = bigquery.jobs.insert(bqProjectId, job, content).setFields("jobReference,status")
           var jobResponse: Job = null
-          try {
-            jobResponse = insert.execute()
-          } catch {
-            // Assume any exception is ephemeral.
-            case e: java.io.IOException => logger.info("LOST OF SET OF 10000 ROWS UPDATED")
-//              throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
+          val content = new ByteArrayContent("application/octet-stream", batch.mkString("\n").toCharArray.map(_.toByte))
+          while (jobResponse == null) {
+            try {
+              val job = BigqueryUtils.makeLoadJob(ref)
+              val insert = bigquery.jobs.insert(bqProjectId, job, content).setFields("jobReference,status")
+              jobResponse = insert.execute()
+            } catch {
+              // Assume any exception is ephemeral.
+              case e: java.io.IOException => {
+                logger.info(s"LOST OF SET OF $batchSize ROWS UPDATED")
+                logger.debug("Encountered a network exception, ignoring...")
+//                throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
+              }
+            }
           }
           jobResponse match {
             case null => null
@@ -132,15 +138,20 @@ import com.typesafe.scalalogging.slf4j.Logging
       // force jobs to execute
       var jobs = jobIterator.toList
 
-      while (jobs.length > 0) {
+      while (jobs.nonEmpty) {
         // does this thread sleep block other workers?
         Thread.sleep(100)
         jobs = jobs.filter { job =>
           if (job != null) {
-            job.checkStatus != "DONE"
+            for (i <- 0 until 10) {
+              try {
+                job.checkStatus != "DONE"
+              } catch {
+                case e: Throwable => logger.info(s"Getting job status for ${job.jobId} failed. Retrying... (attempt ${i + 1})")
+              }
+            }
           }
           false
-        }
       }
       logger.debug("done with all jobs")
     }
