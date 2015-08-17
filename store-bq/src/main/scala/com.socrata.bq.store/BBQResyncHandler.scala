@@ -122,11 +122,8 @@ import com.typesafe.scalalogging.slf4j.Logging
               jobResponse = insert.execute()
             } catch {
               // Assume any exception is ephemeral.
-              case e: java.io.IOException => {
-                logger.info(s"LOST OF SET OF $batchSize ROWS UPDATED")
-                logger.debug("Encountered a network exception, ignoring...")
-//                throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
-              }
+              case e: java.io.IOException => logger.debug("Encountered a network exception, ignoring...")
+              case _ => throw new ResyncSecondaryException("An error occurred while sending a request to BigQuery")
             }
           }
           jobResponse match {
@@ -147,7 +144,7 @@ import com.typesafe.scalalogging.slf4j.Logging
               try {
                 job.checkStatus != "DONE"
               } catch {
-                case e: Throwable => logger.info(s"Getting job status for ${job.jobId} failed. Retrying... (attempt ${i + 1})")
+                case e: java.io.IOException => logger.info(s"Getting job status for ${job.jobId} failed. Retrying... (attempt ${i + 1})")
               }
             }
           }
