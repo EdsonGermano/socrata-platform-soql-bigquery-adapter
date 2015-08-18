@@ -42,7 +42,10 @@ class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
   }
 
   override def jvalue(value: SoQLValue): JValue = {
-    if (value == null) JNull
+    if (value == null) JObject(Map(
+      "lat" -> JNull,
+      "long" -> JNull
+    ))
     else JObject(Map(
       "lat" -> JNumber(value.asInstanceOf[SoQLPoint].value.getY),
       "long" -> JNumber(value.asInstanceOf[SoQLPoint].value.getX)
