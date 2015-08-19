@@ -2,24 +2,20 @@ instances {
 {% for i in PG_SECONDARY_INSTANCES.split() %}
   {% set name, hostname = i.split(':') %}
   {{ name }} {
-    secondaryType = pg
-    numWorkers = {{ PG_SECONDARY_NUM_WORKERS }}
-    config = ${pg-secondary-config}
+    secondaryType = bbq
+    numWorkers = {{ BQ_SECONDARY_NUM_WORKERS }}
+    config = ${bq-secondary-config}
     config.database.host = "{{ hostname }}"
   }
 {% endfor %}
 }
 
-pg-secondary-config {
+bq-secondary-config {
   database {
-    app-name = "pg-secondary-store"
-    port = "{{ PG_SECONDARY_DB_PORT }}"
-    database = "{{ PG_SECONDARY_DB_NAME }}"
-    username = "{{ PG_SECONDARY_DB_USER }}"
-    {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+    app-name = "bq-secondary-store"
 
     c3p0 {
-      maxPoolSize = {{ PG_SECONDARY_NUM_WORKERS }}
+      maxPoolSize = {{ BQ_SECONDARY_NUM_WORKERS }}
       idleConnectionTestPeriod = 60
       testConnectionOnCheckin = true
       preferredTestQuery = "SELECT 1"
@@ -37,13 +33,11 @@ pg-secondary-config {
     appender {
       console.class = org.apache.log4j.ConsoleAppender
       console.props {
-	layout.class = org.apache.log4j.PatternLayout
-	layout.props {
-	  ConversionPattern = "%d %p [%t] (%X{X-Socrata-RequestId}) [%X{X-Socrata-Resource}] %c{1} %m%n"
-	}
+        layout.class = org.apache.log4j.PatternLayout
+        layout.props {
+          ConversionPattern = "%d %p [%t] (%X{X-Socrata-RequestId}) [%X{X-Socrata-Resource}] %c{1} %m%n"
+        }
       }
     }
   }
-
-  tablespace = "{{ PG_SECONDARY_TABLESPACE_FN }}"
 }
