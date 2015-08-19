@@ -1,9 +1,10 @@
 package com.socrata.bq.soql
 
-import java.math
-
+import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
+import javax.xml.bind.DatatypeConverter.{parseBase64Binary, printBase64Binary}
 import com.socrata.soql.types._
 import com.vividsolutions.jts.geom.{Coordinate, GeometryFactory}
+import com.vividsolutions.jts.io.{WKBReader, WKBWriter}
 import org.joda.time.{DateTimeZone, LocalDateTime, DateTime}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.{Matchers, FunSuite}
@@ -127,9 +128,32 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
   }
 
   test("SoQLMultiPolygon") {
+    val wkbWriter = new WKBWriter()
+    val wkbReader = new WKBReader()
     val geomFactory = new GeometryFactory()
     forAll { x: Tuple4[Double, Double, Double, Double] =>
-      val s = BigQueryRepFactory(SoQLMultiPolygon).SoQL(Seq(x._1.toString, x._2.toString, x._3.toString, x._4.toString))
+      val rect = geomFactory.createMultiPolygon(
+        Array(geomFactory.createPolygon(geomFactory.createLinearRing(Array(
+          new Coordinate(x._2, x._1),
+          new Coordinate(x._2, x._3),
+          new Coordinate(x._4, x._3),
+          new Coordinate(x._4, x._1),
+          new Coordinate(x._2, x._1)
+        )))))
+      val s = BigQueryRepFactory(SoQLMultiPolygon).SoQL(Seq(printBase64Binary(wkbWriter.write(rect))))
+
+      s.typ should be (SoQLMultiPolygon)
+      s.asInstanceOf[SoQLMultiPolygon].value should be (rect)
+      s should be (SoQLMultiPolygon(rect))
+    }
+  }
+
+  test("SoQLMultiPolygon (BoundingBoxRep)") {
+    val wkbWriter = new WKBWriter()
+    val geomFactory = new GeometryFactory()
+    forAll { x: Tuple4[Double, Double, Double, Double] =>
+      val rep = new BoundingBoxRep
+      val s = rep.SoQL(Seq(x._1.toString, x._2.toString, x._3.toString, x._4.toString))
       val rect = geomFactory.createMultiPolygon(
         Array(geomFactory.createPolygon(geomFactory.createLinearRing(Array(
         new Coordinate(x._2, x._1),
@@ -138,6 +162,7 @@ class BigqueryRepsTest extends FunSuite with Matchers with PropertyChecks {
         new Coordinate(x._4, x._1),
         new Coordinate(x._2, x._1)
       )))))
+
       s.typ should be (SoQLMultiPolygon)
       s.asInstanceOf[SoQLMultiPolygon].value should be (rect)
       s should be (SoQLMultiPolygon(rect))
