@@ -59,7 +59,7 @@ class SqlizerTest extends FunSuite with Matchers {
   test("extent") {
     val soql = "select extent(point)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (MIN(point.lat), MIN(point.long), MAX(point.lat), MAX(point.long)) FROM t1")
+    sql should be ("SELECT MIN(point.lat), MIN(point.long), MAX(point.lat), MAX(point.long) FROM t1")
     setParams.length should be (0)
   }
 

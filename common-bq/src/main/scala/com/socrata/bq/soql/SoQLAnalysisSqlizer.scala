@@ -145,7 +145,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    */
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.map(sql =>
-      if(sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast).*")) {
+      if(sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp).*")) {
         s"$sql AS ${sql.replaceAll(convToUnderScore, "_")}"
       } else {
         sql
