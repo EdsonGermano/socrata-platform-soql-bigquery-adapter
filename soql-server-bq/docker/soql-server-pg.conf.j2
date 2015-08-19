@@ -1,4 +1,4 @@
-com.socrata.soql-server-pg {
+com.socrata.soql-server-bq {
   curator.ensemble = {{ ZOOKEEPER_ENSEMBLE }}
   service-advertisement.address = "{{ ARK_HOST }}"
 
@@ -34,5 +34,5 @@ com.socrata.soql-server-pg {
     log4j = ${common-log4j}
   }
 
-  instance = {{ PG_SECONDARY_INSTANCE }}
+  instance = {{ BQ_SECONDARY_INSTANCE }}
 }
