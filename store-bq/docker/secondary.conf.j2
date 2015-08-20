@@ -1,13 +1,9 @@
 instances {
-{% for i in PG_SECONDARY_INSTANCES.split() %}
-  {% set name, hostname = i.split(':') %}
-  {{ name }} {
+  bbq {
     secondaryType = bbq
     numWorkers = {{ BQ_SECONDARY_NUM_WORKERS }}
     config = ${bq-secondary-config}
-    config.database.host = "{{ hostname }}"
   }
-{% endfor %}
 }
 
 bq-secondary-config {
