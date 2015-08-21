@@ -17,6 +17,11 @@ database {
 bq-secondary-config {
   database {
     app-name = "bq-secondary-store"
+    host = "{{ PG_SECONDARY_DB_HOST }}"
+    port = "{{ PG_SECONDARY_DB_PORT }}"
+    database = "{{ PG_SECONDARY_DB_NAME }}"
+    username = "{{ PG_SECONDARY_DB_USER }}"
+    {{ PG_SECONDARY_DB_PASSWORD_LINE }}
 
     c3p0 {
       maxPoolSize = {{ BQ_SECONDARY_NUM_WORKERS }}
