@@ -53,14 +53,17 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
         }
 
         if (state != "DONE") {
-          logger.info(s"Job not finished. Checking status again... (retries remaining $retries)")
+          logger.info(s"Job $jobId still $state. Checking status again... (retries remaining $retries)")
         }
       } catch {
         case e: java.io.IOException =>
           logger.info(s"Getting job status for $jobId failed. Retrying... (retries remaining $retries)")
       }
-      Thread.sleep(100)
-      verify(retries - 1)
+
+      if (state != "DONE") {
+        Thread.sleep(1000)
+        verify(retries - 1)
+      }
     }
   }
 
@@ -174,7 +177,7 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
       }
 
       // Check the status of all jobs for completion
-      jobIterator.foreach(_.verify(20)) // TODO: Use config!
+      jobIterator.foreach(_.verify(100)) // TODO: Use config!
       logger.debug("done with all jobs")
     }
   }
