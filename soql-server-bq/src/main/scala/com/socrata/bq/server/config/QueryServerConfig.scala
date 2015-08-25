@@ -19,5 +19,4 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val threadpool = getRawConfig("threadpool")
   val bigqueryProjectId = getRawConfig("bigquery").getString("project-id")
   val bigqueryDatasetId = getRawConfig("bigquery").getString("dataset-id")
-  val bigqueryTestProjectId = getRawConfig("bigquery").getString("test-project-id")
 }
