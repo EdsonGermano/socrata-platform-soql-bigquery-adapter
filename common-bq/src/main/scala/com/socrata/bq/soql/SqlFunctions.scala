@@ -102,8 +102,8 @@ object SqlFunctions {
     NumberToMoney -> passthrough,
 
     TextToNumber -> formatCall("%s::numeric") _,
-    TextToFixedTimestamp -> formatCall("TIMESTAMP_TO_MSEC(%s)") _, // with timezone
-    TextToFloatingTimestamp -> formatCall("TIMESTAMP_TO_MSEC(%s)") _, // without time zone
+    TextToFixedTimestamp -> formatCall("TIMESTAMP_TO_MSEC(TIMESTAMP(%s)) * 1000") _, // with timezone
+    TextToFloatingTimestamp -> formatCall("TIMESTAMP_TO_MSEC(TIMESTAMP(%s)) * 1000") _, // without time zone
     TextToMoney -> formatCall("%s::numeric") _,
 
     TextToBool -> formatCall("%s") _,
