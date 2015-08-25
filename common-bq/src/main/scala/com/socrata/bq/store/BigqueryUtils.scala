@@ -1,6 +1,6 @@
 package com.socrata.bq.store
 
-import java.sql.{ResultSet, Connection}
+import java.sql.ResultSet
 
 import collection.JavaConversions._
 
@@ -37,6 +37,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
   def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = 
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
 
+    
   def getCopyNumber(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
       conn.createStatement().execute(createTableStatement)
@@ -72,15 +73,15 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
       val stmt = conn.createStatement()
       val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
       val query = s"""
-                  |BEGIN;
-                  |$createTableStatement
-                  |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
-                  |UPDATE ${copyInfoTable}
-                  |  SET (copy_number, data_version) = ('$copyNumber', '$version') WHERE dataset_id='$id';
-                  |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version)
-                  |  SELECT $id, $copyNumber, $version
-                  |  WHERE NOT EXISTS ( SELECT 1 FROM bbq_copy_info WHERE dataset_id='$id' );
-                  |COMMIT;""".stripMargin.trim
+              |BEGIN;
+              |$createTableStatement
+              |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
+              |UPDATE ${copyInfoTable}
+              |  SET (copy_number, data_version) = ('$copyNumber', '$version') WHERE dataset_id='$id';
+              |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version)
+              |  SELECT $id, $copyNumber, $version
+              |  WHERE NOT EXISTS ( SELECT 1 FROM bbq_copy_info WHERE dataset_id='$id' );
+              |COMMIT;""".stripMargin.trim
       stmt.executeUpdate(query)
     }
   }
