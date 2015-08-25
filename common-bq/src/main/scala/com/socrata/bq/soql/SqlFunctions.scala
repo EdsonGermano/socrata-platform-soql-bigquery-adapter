@@ -92,9 +92,9 @@ object SqlFunctions {
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
 
-    FloatingTimeStampTruncYmd -> formatCall("(utc_usec_to_day(timestamp(%s)))") _,
-    FloatingTimeStampTruncYm -> formatCall("(utc_usec_to_month(timestamp(%s)))") _,
-    FloatingTimeStampTruncY -> formatCall("(utc_usec_to_year(timestamp(%s)))") _,
+    FloatingTimeStampTruncYmd -> formatCall("(utc_usec_to_day(%s))") _,
+    FloatingTimeStampTruncYm -> formatCall("(utc_usec_to_month(%s))") _,
+    FloatingTimeStampTruncY -> formatCall("(utc_usec_to_year(%s))") _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
@@ -102,8 +102,8 @@ object SqlFunctions {
     NumberToMoney -> passthrough,
 
     TextToNumber -> formatCall("%s::numeric") _,
-    TextToFixedTimestamp -> formatCall("TIMESTAMP_TO_USEC(TIMESTAMP(%s))") _, // with timezone
-    TextToFloatingTimestamp -> formatCall("TIMESTAMP_TO_USEC(TIMESTAMP(%s))") _, // without time zone
+    TextToFixedTimestamp -> formatCall("TIMESTAMP_TO_MSEC(%s)") _, // with timezone
+    TextToFloatingTimestamp -> formatCall("TIMESTAMP_TO_MSEC(%s)") _, // without time zone
     TextToMoney -> formatCall("%s::numeric") _,
 
     TextToBool -> formatCall("%s") _,

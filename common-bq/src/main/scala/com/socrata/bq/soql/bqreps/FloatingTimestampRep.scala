@@ -14,8 +14,7 @@ class FloatingTimestampRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   override def SoQL(row: Seq[String]): SoQLValue = {
     if (row.head== null) SoQLNull
-    else SoQLFloatingTimestamp(new LocalDateTime(row.head.toDouble.toLong * 1000, DateTimeZone.UTC))
-//    else SoQLFloatingTimestamp(ISODateTimeFormat.localDateOptionalTimeParser.parseLocalDateTime(value))
+    else SoQLFloatingTimestamp(new LocalDateTime(row.head.toLong, DateTimeZone.UTC))
   }
 
   override def jvalue(value: SoQLValue): JValue = {

@@ -18,6 +18,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
 
   val underlying = Tuple3(analysis, tableName, allColumnReps)
   val convToUnderScore = "[)./+\\-?(*<> ]"
+  var aliasMap = scala.collection.mutable.Map[String, String]() // Mapping from expressions that need to be aliased to their aliases
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
     sql(false, rep, setParams, ctx, escape)
@@ -43,7 +44,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
     val (selectPhrase, setParamsSelect) =
-      if (reqRowCount && analysis.groupBy.isEmpty) (Seq("count(*)"), setParams)
+      if (reqRowCount && analysis.groupBy.isEmpty) (funcAlias(Seq("count(*)")), setParams)
       else select(rep, setParams, ctxSelect, escape)
 
     // WHERE
@@ -70,7 +71,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
       val BQSql(sql, newSetParams) = gb.sql(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
-        val modifiedSQL = sql.replaceAll(convToUnderScore, "_") // to reference possible aliases in the SELECT stmt
+        val modifiedSQL = aliasMap.getOrElse(sql, sql) // to reference possible aliases in the SELECT stmt
       (t2._1 :+ modifiedSQL, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
@@ -85,21 +86,16 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
         val BQSql(sql, newSetParams) =
           ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
         val modifiedSQL = sql.contains("desc") match {
-          case true => // need to remove the last instance of the _ from the removal of spaces if DESC is in the
-                       // the SQL statement
-            val modifiedSQL = sql.replaceAll(convToUnderScore, "_")
-            val index = modifiedSQL.lastIndexOf("_")
-            new StringBuilder(modifiedSQL).replace(index, index + 1, " ").toString
-          case false => sql.replaceAll(convToUnderScore, "_")
+          case true => s"${aliasMap.getOrElse(sql.substring(0, sql.indexOf("desc")).trim, sql)} desc"
+          case false => aliasMap.getOrElse(sql, sql)
         }
-          sql.replaceAll(convToUnderScore, "_") // to reference possible aliases in the SELECT stmt
         (t2._1 :+ modifiedSQL, newSetParams)
       }}
 
     val setParamsOrderBy = orderBy.map(_._2).getOrElse(setParamsHaving)
 
     // COMPLETE SQL
-    val completeSql = funcAlias(selectPhrase).mkString("SELECT ", ",", "") +
+    val completeSql = selectPhrase.mkString("SELECT ", ",", "") +
       s" FROM $tableName" +
       where.map(" WHERE " +  _.sql).getOrElse("") +
       search.map(_.sql).getOrElse("") +
@@ -121,22 +117,21 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
                      setParams: Seq[String],
                      ctx: Context,
                      escape: Escape) = {
-    analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
+    val (conv, params) = analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val BQSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
-      val soqlType = coreExpr.typ.toString
+      val soqlType = coreExpr.typ
 
-      val timeStamp = """.*timestamp""".r
-
-      // match regex is there so that the TIMESTAMP_TO_USEC method does not get called when
       // the query wants to extract the day, year, or month from the timestamp.
       val conversion = soqlType match {
-        case timeStamp() => if (!sql.matches(".*(day|year|month).*")) s"TIMESTAMP_TO_USEC($sql)" else sql
-        case "point" => s"$sql.lat, $sql.long"
+        case SoQLFixedTimestamp
+           | SoQLFloatingTimestamp => if (!sql.matches(".*(day|year|month).*")) s"TIMESTAMP_TO_MSEC($sql)" else sql
+        case SoQLPoint => s"$sql.lat, $sql.long"
         case _ => sql
       }
       (t2._1 :+ conversion, newSetParams)
     }
+    (funcAlias(conv), params)
   }
 
   /**
@@ -144,12 +139,16 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    * statement if it is present there.
    */
   private def funcAlias(select: Seq[String]): Seq[String] = {
-    select.map(sql =>
+    select.zipWithIndex.map{
+      case (sql, index) =>
       if(sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp).*")) {
-        s"$sql AS ${sql.replaceAll(convToUnderScore, "_")}"
+        val alias = s"${sql.replaceAll(convToUnderScore, "_")}$index"
+        val newSql = s"$sql AS $alias"
+        aliasMap += (sql -> alias)
+        newSql
       } else {
         sql
-      })
+      }}
   }
 
   /**
