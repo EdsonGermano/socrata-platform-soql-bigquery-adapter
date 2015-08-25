@@ -92,9 +92,9 @@ object SqlFunctions {
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
 
-    FloatingTimeStampTruncYmd -> formatCall("(utc_usec_to_day(%s))") _,
-    FloatingTimeStampTruncYm -> formatCall("(utc_usec_to_month(%s))") _,
-    FloatingTimeStampTruncY -> formatCall("(utc_usec_to_year(%s))") _,
+    FloatingTimeStampTruncYmd -> formatCall("(utc_usec_to_day(%s)/1000)") _,
+    FloatingTimeStampTruncYm -> formatCall("(utc_usec_to_month(%s)/1000)") _,
+    FloatingTimeStampTruncY -> formatCall("(utc_usec_to_year(%s))/1000") _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
