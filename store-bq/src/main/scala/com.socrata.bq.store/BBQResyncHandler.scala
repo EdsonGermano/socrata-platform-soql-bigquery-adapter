@@ -9,6 +9,7 @@ import com.google.api.client.http.{AbstractInputStreamContent, ByteArrayContent}
 import com.google.api.services.bigquery.{Bigquery, BigqueryRequest}
 import com.google.api.services.bigquery.model._
 import com.rojoma.json.v3.ast._
+import com.typesafe.config.Config
 import com.rojoma.simplearm.Managed
 import com.rojoma.json.v3.util.JsonUtil
 import com.typesafe.scalalogging.slf4j.Logging
@@ -20,12 +21,17 @@ import com.socrata.bq.soql.BigQueryRepFactory
 
 import scala.collection.mutable.ArrayBuffer
 
-class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: String) extends Logging {
+class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: String, val bqDatasetId: String) extends Logging {
+  val BATCH_SIZE: Int = config.getInt("batch-size")
+  val INSERT_TIMEOUT: Int = config.getInt("insert-timeout")
+  val INSERT_RETRIES: Int = config.getInt("insert-retries")
+  val JOB_STATUS_TIMEOUT: Int = config.getInt("job-status-timeout")
+  val JOB_STATUS_RETRIES: Int = config.getInt("job-status-retries")
 
   class BBQJob(job: Job) {
     val jobId = job.getJobReference.getJobId
     var state = job.getStatus.getState
-    logger.debug(s"new bigquery job $jobId with state $state")
+    logger.debug(s"New bigquery job $jobId with state $state")
 
     @tailrec
     final def verify(retries: Int): Unit = {
@@ -38,13 +44,13 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
         val newState = checkStatusJob.getStatus.getState
         if (newState != state) {
           state = newState
-          logger.debug(s"new state for job $jobId: $state")
+          logger.debug(s"New state for job $jobId: $state")
           if (state == "DONE") {
             // Now that the job is done, we need to handle any errors that may have occurred.
             if (job.getStatus.getErrorResult != null) {
               logger.info(s"Final error message: ${checkStatusJob.getStatus.getErrorResult.getMessage}")
               checkStatusJob.getStatus.getErrors.foreach(e => logger.info(s"Error occurred: ${e.getMessage}"))
-              //throw new ResyncSecondaryException("Failed to load some data into bigquery")
+              throw new RuntimeException("TODO: Figure out what to actually throw!")
             }
           }
           if (!List("PENDING", "RUNNING", "DONE").contains(state)) {
@@ -53,7 +59,7 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
         }
 
         if (state != "DONE") {
-          logger.info(s"Job $jobId still $state. Checking status again... (retries remaining $retries)")
+          logger.debug(s"Job $jobId still $state. Checking status again... (retries remaining $retries)")
         }
       } catch {
         case e: java.io.IOException =>
@@ -61,7 +67,7 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
       }
 
       if (state != "DONE") {
-        Thread.sleep(1000)
+        Thread.sleep(JOB_STATUS_TIMEOUT)
         verify(retries - 1)
       }
     }
@@ -113,8 +119,7 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
       // Assume that network-related exceptions are ephemeral.
       case e: java.io.IOException =>
         logger.info(s"Encountered a network exception: (${e.getClass}) ${e.getMessage}")
-        logger.info("Retrying in 1000ms...")
-        Thread.sleep(100)
+        Thread.sleep(INSERT_TIMEOUT)
       case e: Exception =>
         e.printStackTrace()
         throw e
@@ -127,7 +132,7 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
              copyInfo: SecondaryCopyInfo,
              schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
              managedRowIterator: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Unit = {
-    logger.info(s"resyncing ${datasetInfo.internalName}")
+    logger.info(s"Resyncing ${datasetInfo.internalName}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
     // Make table reference and bigquery metadata
     val columnNames: ColumnIdMap[String] = BigqueryUtils.makeColumnNameMap(schema)
@@ -147,9 +152,7 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
     logger.info(s"Inserting into ${ref.getTableId}")
 
     managedRowIterator.foreach { rowIterator =>
-      val batchSize = 2000 // TODO: Config?  Calculate Dynamically?
-
-      val rows = rowIterator.grouped(batchSize).map { batch =>
+      val rows = rowIterator.grouped(BATCH_SIZE).map { batch =>
         val buffer = new ArrayBuffer[Byte]
 
         batch.foreach { row =>
@@ -171,14 +174,14 @@ class BBQResyncHandler(bigquery: Bigquery, bqProjectId: String, bqDatasetId: Str
 
       val jobIterator = rows.map { batch =>
         val content = new ByteArrayContent("application/octet-stream", batch)
-        val jobResponse: Job = loadContent(ref, content, 20) // TODO: config
+        val jobResponse: Job = loadContent(ref, content, INSERT_RETRIES)
 
         new BBQJob(jobResponse)
       }
 
       // Check the status of all jobs for completion
-      jobIterator.foreach(_.verify(100)) // TODO: Use config!
-      logger.debug("done with all jobs")
+      jobIterator.foreach(_.verify(JOB_STATUS_RETRIES))
+      logger.debug("Done with all jobs")
     }
   }
 }
