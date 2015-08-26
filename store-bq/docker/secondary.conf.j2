@@ -51,16 +51,15 @@ bq-secondary-config {
   }
 
   resync-handler {
-    batch-size = 2000
+    batch-size = 50000
     insert-timeout = 100
-    insert-retries = 10
+    insert-retries = 20
     job-status-timeout = 1000
-    job-status-retries = 100
+    job-status-retries = 200
   }
 
   bigquery {
     project-id = "thematic-bee-98521"
-    dataset-id = "socrata-data"
-    test-project-id = "test"
+    dataset-id = "{{ DATASET_ID }}"
   }
 }

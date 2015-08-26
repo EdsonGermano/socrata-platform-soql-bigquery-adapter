@@ -1,12 +1,9 @@
 FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:0.7.7_1138_db95e5cc_ab6ca3f8
 
-# TODO expose JMX
-# EXPOSE
-
 ENV SECONDARY_ARTIFACT store-bq-assembly.jar
 ENV SECONDARY_CONFIG secondary.conf
 
-ENV BQ_SECONDARY_NUM_WORKERS 5
+ENV BQ_SECONDARY_NUM_WORKERS 1
 ENV BQ_SECONDARY_WORK_MEM 768MB
 ENV BQ_SECONDARY_TABLESPACE_FN nil
 

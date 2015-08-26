@@ -25,6 +25,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   private val BQ_DATASET_ID = config.getConfig("bigquery").getString("dataset-id")
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
+  logger.debug(s"Using project ${BQ_PROJECT_ID} with dataset ${BQ_DATASET_ID}")
 
   private val bigquery = {
     var credential: GoogleCredential = GoogleCredential.getApplicationDefault
