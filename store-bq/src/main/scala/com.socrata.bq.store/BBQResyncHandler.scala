@@ -38,7 +38,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
       if (retries <= 0) {
         throw new RuntimeException("TODO: Figure out what to actually throw!")
       }
-      
+
       try {
         val checkStatusJob = bigquery.jobs.get(bqProjectId, jobId).setFields("status").execute()
         val newState = checkStatusJob.getStatus.getState
@@ -98,7 +98,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     }
     loop()
   }
-  
+
   @tailrec
   private def loadContent(ref: TableReference,
                           content: AbstractInputStreamContent,
@@ -106,7 +106,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     if (retries <= 0) {
       throw new RuntimeException("TODO: Figure out what to actually throw!")
     }
-     
+
     try {
       val job = BigqueryUtils.makeLoadJob(ref)
       val insert = bigquery.jobs.insert(bqProjectId, job, content).setFields("jobReference,status")
@@ -118,7 +118,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     } catch {
       // Assume that network-related exceptions are ephemeral.
       case e: java.io.IOException =>
-        logger.info(s"Encountered a network exception: (${e.getClass}) ${e.getMessage}")
+        logger.info(s"Encountered a network exception: (${e.getClass}) ${e.getMessage} (Retries remaining: ${retries})")
         Thread.sleep(INSERT_TIMEOUT)
       case e: Exception =>
         e.printStackTrace()
@@ -152,7 +152,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     logger.info(s"Inserting into ${ref.getTableId}")
 
     managedRowIterator.foreach { rowIterator =>
-      val rows = rowIterator.grouped(BATCH_SIZE).map { batch =>
+      val batches = rowIterator.grouped(BATCH_SIZE).map { batch =>
         val buffer = new ArrayBuffer[Byte]
 
         batch.foreach { row =>
@@ -172,15 +172,14 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
         buffer.toArray
       }
 
-      val jobIterator = rows.map { batch =>
+      val jobs = batches.map({ batch =>
         val content = new ByteArrayContent("application/octet-stream", batch)
         val jobResponse: Job = loadContent(ref, content, INSERT_RETRIES)
-
-        new BBQJob(jobResponse)
-      }
+        jobResponse
+      }).toList
 
       // Check the status of all jobs for completion
-      jobIterator.foreach(_.verify(JOB_STATUS_RETRIES))
+      jobs.foreach(new BBQJob(_).verify(JOB_STATUS_RETRIES))
       logger.debug("Done with all jobs")
     }
   }
