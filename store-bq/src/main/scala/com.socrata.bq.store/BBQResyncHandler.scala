@@ -44,7 +44,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
         val newState = checkStatusJob.getStatus.getState
         if (newState != state) {
           state = newState
-          logger.debug(s"New state for job $jobId: $state")
+          logger.info(s"New state for job $jobId: $state")
           if (state == "DONE") {
             // Now that the job is done, we need to handle any errors that may have occurred.
             if (job.getStatus.getErrorResult != null) {
@@ -59,7 +59,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
         }
 
         if (state != "DONE") {
-          logger.debug(s"Job $jobId still $state. Checking status again... (retries remaining $retries)")
+          logger.info(s"Job $jobId still $state. Checking status again... (retries remaining $retries)")
         }
       } catch {
         case e: java.io.IOException =>
