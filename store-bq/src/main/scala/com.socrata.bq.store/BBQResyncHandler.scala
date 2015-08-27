@@ -73,6 +73,42 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     }
   }
 
+
+  // BoundedBuffer is append-only
+  class BoundedBuffer(size: Int) {
+    private val array = new Array[Byte](size)
+    private var length = 0
+    // Appends a string and a newline if there is enough space. Returns true on success, false otherwise
+    def append(row: String): Boolean = {
+      if (length + row.length + 1 > size) {
+        return false
+      } else {
+        for (char <- row) {
+          array(length) = char.toByte
+          length += 1
+        }
+        array(length) = '\n'.toByte
+        length += 1
+        return true
+      }
+    }
+
+    private def toArray(): Array[Byte] = {
+      array.slice(0, length)
+    }
+
+    def toByteArrayContent(): ByteArrayContent = {
+      new ByteArrayContent("application/octet-stream", toArray())
+    }
+
+    def hasContent(): Boolean = {
+      length != 0
+    }
+
+    def clear(): Unit = {
+      length = 0
+    }
+  }
   private def parseDatasetId(datasetInternalName: String) = {
     datasetInternalName.split('.')(1).toInt
   }
@@ -152,10 +188,8 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     logger.info(s"Inserting into ${ref.getTableId}")
 
     managedRowIterator.foreach { rowIterator =>
-      val batches = rowIterator.grouped(BATCH_SIZE).map { batch =>
-        val buffer = new ArrayBuffer[Byte]
-
-        batch.foreach { row =>
+      val buffer = new BoundedBuffer(1000000) // TODO: put in conf
+      var insertJobs = rowIterator.foldLeft(Seq[Job]()) { (jobs: Seq[Job], row: ColumnIdMap[SoQLValue]) =>
           val rowMap = row.foldLeft(Map[String, JValue]()) {
             case (map, (id, value)) =>
               columnNames.get(id) match {
@@ -163,23 +197,25 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
                 case Some(name) => map + ((name, BigQueryRepFactory(value.typ).jvalue(value)))
               }
           }
+          val jsonifiedRow = JsonUtil.renderJson(rowMap)
+          buffer.append(jsonifiedRow) match {
+            case false =>
+              val jobResponse = loadContent(ref, buffer.toByteArrayContent(), INSERT_RETRIES)
+              logger.info("Buffer is full, sending insert job")
+              buffer.clear()
+              buffer.append(jsonifiedRow)
+              jobs :+ jobResponse
+            case true => jobs
+          }
+        }.toList // Force execution of jobs
 
-          // TODO: See if newlines are necessary
-          val bytes = (JsonUtil.renderJson(rowMap) + "\n").getBytes(UTF_8)
-          buffer.appendAll(bytes)
-        }
-
-        buffer.toArray
-      }
-
-      val jobs = batches.map({ batch =>
-        val content = new ByteArrayContent("application/octet-stream", batch)
-        val jobResponse: Job = loadContent(ref, content, INSERT_RETRIES)
-        jobResponse
-      }).toList
+      // Final check to make sure that all rows get sent
+      logger.info("Checking buffer and send off final insert job")
+      insertJobs = insertJobs :+ loadContent(ref, buffer.toByteArrayContent(), INSERT_RETRIES)
+      buffer.clear()
 
       // Check the status of all jobs for completion
-      jobs.foreach(new BBQJob(_).verify(JOB_STATUS_RETRIES))
+      insertJobs.foreach(new BBQJob(_).verify(JOB_STATUS_RETRIES))
       logger.debug("Done with all jobs")
     }
   }
