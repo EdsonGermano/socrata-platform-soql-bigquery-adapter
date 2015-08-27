@@ -188,7 +188,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     logger.info(s"Inserting into ${ref.getTableId}")
 
     managedRowIterator.foreach { rowIterator =>
-      val buffer = new BoundedBuffer(1000000) // TODO: put in conf
+      val buffer = new BoundedBuffer(BATCH_SIZE)
       var insertJobs = rowIterator.foldLeft(Seq[Job]()) { (jobs: Seq[Job], row: ColumnIdMap[SoQLValue]) =>
           val rowMap = row.foldLeft(Map[String, JValue]()) {
             case (map, (id, value)) =>

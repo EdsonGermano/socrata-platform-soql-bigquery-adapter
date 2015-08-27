@@ -51,7 +51,7 @@ bq-secondary-config {
   }
 
   resync-handler {
-    batch-size = 50000
+    batch-size = {{ BATCH_SIZE }}
     insert-timeout = 100
     insert-retries = 20
     job-status-timeout = 1000
