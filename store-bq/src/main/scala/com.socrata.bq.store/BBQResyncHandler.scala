@@ -44,13 +44,19 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
         val newState = checkStatusJob.getStatus.getState
         if (newState != state) {
           state = newState
-          logger.info(s"New state for job $jobId: $state")
+          logger.info(s"$jobId is now $state")
           if (state == "DONE") {
             // Now that the job is done, we need to handle any errors that may have occurred.
-            if (job.getStatus.getErrorResult != null) {
+            if (checkStatusJob.getStatus.getErrorResult != null) {
               logger.info(s"Final error message: ${checkStatusJob.getStatus.getErrorResult.getMessage}")
               checkStatusJob.getStatus.getErrors.foreach(e => logger.info(s"Error occurred: ${e.getMessage}"))
               throw new RuntimeException("TODO: Figure out what to actually throw!")
+            }
+            // Log job statistics
+            val statisticsJob = bigquery.jobs.get(bqProjectId, jobId).setFields("statistics").execute()
+            if (statisticsJob.getStatistics != null && statisticsJob.getStatistics.getLoad != null) {
+              logger.info(s"${statisticsJob.getStatistics.getLoad.getOutputBytes} bytes processed")
+              logger.info(s"${statisticsJob.getStatistics.getLoad.getOutputRows} rows processed")
             }
           }
           if (!List("PENDING", "RUNNING", "DONE").contains(state)) {
@@ -59,7 +65,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
         }
 
         if (state != "DONE") {
-          logger.info(s"Job $jobId still $state. Checking status again... (retries remaining $retries)")
+          logger.info(s"$jobId still $state. Checking status again... (retries remaining $retries)")
         }
       } catch {
         case e: java.io.IOException =>
@@ -127,7 +133,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
         case e: GoogleJsonResponseException if acceptableResponseCodes contains e.getDetails.getCode =>
           return None
         case ioError: java.io.IOException =>
-          logger.error(s"IOException occurred while executing a request to bigquery. Retrying in 5000ms.")
+          logger.error(s"Encountered a network exception: (${ioError.getClass}) ${ioError.getMessage}")
       }
       Thread.sleep(5000)
       loop()
