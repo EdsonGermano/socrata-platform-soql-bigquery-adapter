@@ -209,7 +209,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
             case (map, (id, value)) =>
               columnNames.get(id) match {
                 case None => map
-                case Some(name) => map + ((name, BigQueryRepFactory(value.typ).jvalue(value)))
+                case Some(name) => map + ((name, BigQueryRepFactory(schema(id).typ).jvalue(value)))
               }
           }
           val jsonifiedRow = JsonUtil.renderJson(rowMap)
