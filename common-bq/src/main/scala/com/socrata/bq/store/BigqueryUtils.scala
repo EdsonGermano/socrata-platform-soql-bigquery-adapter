@@ -28,17 +28,20 @@ import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
 import com.google.api.services.bigquery.model._
 
-class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase with Logging {
+class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
 
-  private val COPY_INFO_TABLE = "bbq_copy_info"
+  private val copyInfoTable = "bbq_copy_info"
+  private val createTableStatement =
+    s"CREATE TABLE IF NOT EXISTS $copyInfoTable ( dataset_id integer PRIMARY KEY, copy_number integer, data_version integer );"
 
   def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = 
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
-  
 
+    
   def getCopyNumber(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
-      val query = s"SELECT copy_number FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
+      conn.createStatement().execute(createTableStatement)
+      val query = s"SELECT copy_number FROM $copyInfoTable WHERE dataset_id=$datasetId;"
       val stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)
       val resultSet = stmt.executeQuery(query)
       if (resultSet.first()) {
@@ -52,7 +55,8 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
 
   def getDataVersion(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
-      val query = s"SELECT data_version FROM $COPY_INFO_TABLE WHERE dataset_id=$datasetId"
+      conn.createStatement().execute(createTableStatement)
+      val query = s"SELECT data_version FROM $copyInfoTable WHERE dataset_id=$datasetId;"
       val stmt = conn.createStatement()
       val resultSet = stmt.executeQuery(query)
       if (resultSet.first()) {
@@ -70,10 +74,11 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
       val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
       val query = s"""
               |BEGIN;
-              |LOCK TABLE ${COPY_INFO_TABLE} IN SHARE MODE;
-              |UPDATE ${COPY_INFO_TABLE}
+              |$createTableStatement
+              |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
+              |UPDATE ${copyInfoTable}
               |  SET (copy_number, data_version) = ('$copyNumber', '$version') WHERE dataset_id='$id';
-              |INSERT INTO ${COPY_INFO_TABLE} (dataset_id, copy_number, data_version)
+              |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version)
               |  SELECT $id, $copyNumber, $version
               |  WHERE NOT EXISTS ( SELECT 1 FROM bbq_copy_info WHERE dataset_id='$id' );
               |COMMIT;""".stripMargin.trim
@@ -84,7 +89,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
   private def getConnection() = dsInfo.dataSource.getConnection()
 }
 
-object BigqueryUtils extends BigqueryUtilsBase with Logging
+object BigqueryUtils extends BigqueryUtilsBase
 
 class BigqueryUtilsBase extends Logging {
 

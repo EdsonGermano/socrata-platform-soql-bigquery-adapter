@@ -25,9 +25,10 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   private val BQ_DATASET_ID = config.getConfig("bigquery").getString("dataset-id")
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
+  logger.debug(s"Using project ${BQ_PROJECT_ID} with dataset ${BQ_DATASET_ID}")
 
   private val bigquery = {
-    var credential: GoogleCredential = GoogleCredential.getApplicationDefault()
+    var credential: GoogleCredential = GoogleCredential.getApplicationDefault
     if (credential.createScopedRequired) {
       credential = credential.createScoped(BigqueryScopes.all)
     }
@@ -38,7 +39,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   private val bigqueryUtils = new BigqueryUtils(dsInfo, BQ_PROJECT_ID)
 
-  private val resyncHandler = new BBQResyncHandler(bigquery, BQ_PROJECT_ID, BQ_DATASET_ID)
+  private val resyncHandler = new BBQResyncHandler(config.getConfig("resync-handler"), bigquery, BQ_PROJECT_ID, BQ_DATASET_ID)
 
   // called on graceful shutdown
   override def shutdown(): Unit = {

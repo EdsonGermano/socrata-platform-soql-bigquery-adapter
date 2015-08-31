@@ -1,11 +1,11 @@
-com.socrata.soql-server-pg {
+com.socrata.soql-server-bq {
   curator.ensemble = {{ ZOOKEEPER_ENSEMBLE }}
   service-advertisement.address = "{{ ARK_HOST }}"
 
   # TODO Support runtime port assignment so we can run more than one instance on a single node.
   # Need to take PORT_x env variables we get passed and advertise our port based on them.
-  port = 6090
-  liveness-check.port = 6091
+  port = 6060
+  liveness-check.port = 6061
 
   metrics {
     enable-graphite = {{ ENABLE_GRAPHITE }}
@@ -34,5 +34,12 @@ com.socrata.soql-server-pg {
     log4j = ${common-log4j}
   }
 
-  instance = {{ PG_SECONDARY_INSTANCE }}
+  instance = {{ BQ_SECONDARY_INSTANCE }}
+
+  bigquery {
+    project-id = "thematic-bee-98521"
+    dataset-id = "socrata-data"
+    test-project-id = "test"
+  }
+
 }

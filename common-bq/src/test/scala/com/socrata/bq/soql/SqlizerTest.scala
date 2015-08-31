@@ -46,14 +46,14 @@ class SqlizerTest extends FunSuite with Matchers {
   test("as implicit alias order by") {
     val soql = "select sum(id) order by sum(id) limit 2"
     val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-    sql should be ("SELECT (sum(id)) AS _sum_id__ FROM t1 ORDER BY _sum_id__ LIMIT 2")
+    sql should be ("SELECT (sum(id)) AS _sum_id__0 FROM t1 ORDER BY _sum_id__0 LIMIT 2")
     setParams.length should be (0)
   }
 
   test("as implicit alias no forward alias reference") {
     val soql = "select sum(id) group by id limit 2"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (sum(id)) AS _sum_id__ FROM t1 GROUP BY id LIMIT 2")
+    sql should be ("SELECT (sum(id)) AS _sum_id__0 FROM t1 GROUP BY id LIMIT 2")
   }
 
   test("extent") {
@@ -121,15 +121,15 @@ class SqlizerTest extends FunSuite with Matchers {
   test("select count(*)") {
     val soql = "select count(*)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(*)) AS _count____ FROM t1")
+    sql should be ("SELECT (count(*)) AS _count____0 FROM t1")
     setParams.length should be (0)
   }
 
   test("select aggregate functions") {
     val soql = "select count(id), avg(id), min(id), max(id), sum(id)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(id)) AS _count_id__,(avg(id)) AS _avg_id__,(min(id)) AS _min_id__,(max(id)) AS " +
-      "_max_id__,(sum(id)) AS _sum_id__ FROM t1")
+    sql should be ("SELECT (count(id)) AS _count_id__0,(avg(id)) AS _avg_id__1,(min(id)) AS _min_id__2,(max(id)) AS " +
+      "_max_id__3,(sum(id)) AS _sum_id__4 FROM t1")
     setParams.length should be (0)
   }
 
