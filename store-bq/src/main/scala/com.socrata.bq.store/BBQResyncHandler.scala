@@ -36,27 +36,28 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     @tailrec
     final def verify(retries: Int): Unit = {
       if (retries <= 0) {
-        throw new RuntimeException("TODO: Figure out what to actually throw!")
+        throw new RuntimeException(s"Ran out of retries while verifying $jobId completed")
       }
 
       try {
-        val checkStatusJob = bigquery.jobs.get(bqProjectId, jobId).setFields("status").execute()
-        val newState = checkStatusJob.getStatus.getState
+        val verifyJob = bigquery.jobs.get(bqProjectId, jobId).setFields("status,statistics").execute()
+        val status = verifyJob.getStatus
+        val newState = status.getState
+        val statistics = verifyJob.getStatistics
         if (newState != state) {
           state = newState
           logger.info(s"$jobId is now $state")
           if (state == "DONE") {
             // Now that the job is done, we need to handle any errors that may have occurred.
-            if (checkStatusJob.getStatus.getErrorResult != null) {
-              logger.info(s"Final error message: ${checkStatusJob.getStatus.getErrorResult.getMessage}")
-              checkStatusJob.getStatus.getErrors.foreach(e => logger.info(s"Error occurred: ${e.getMessage}"))
+            if (status.getErrorResult != null) {
+              logger.info(s"Final error message: ${status.getErrorResult.getMessage}")
+              status.getErrors.foreach(e => logger.info(s"Error occurred: ${e.getMessage}"))
               throw new RuntimeException("TODO: Figure out what to actually throw!")
             }
             // Log job statistics
-            val statisticsJob = bigquery.jobs.get(bqProjectId, jobId).setFields("statistics").execute()
-            if (statisticsJob.getStatistics != null && statisticsJob.getStatistics.getLoad != null) {
-              logger.info(s"${statisticsJob.getStatistics.getLoad.getOutputBytes} bytes processed")
-              logger.info(s"${statisticsJob.getStatistics.getLoad.getOutputRows} rows processed")
+            if (statistics != null && statistics.getLoad != null) {
+              logger.info(s"${statistics.getLoad.getOutputBytes} bytes processed")
+              logger.info(s"${statistics.getLoad.getOutputRows} rows processed")
             }
           }
           if (!List("PENDING", "RUNNING", "DONE").contains(state)) {
@@ -122,23 +123,31 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
   /**
    * Executes the request. If the request fails from a generic java.io.IOException, assumes a network error occurred,
    * and reissues the request after 5000ms.
-   * @return Some response, if the execution succeeds or eventually succeeds. None if it fails with an acceptalbe
+   * @return Some response, if the execution succeeds or eventually succeeds. None if it fails with an acceptable
    *         response code.
    */
-  private def executeAndAcceptResponseCodes[T](request: BigqueryRequest[T], acceptableResponseCodes: Int*): Option[T] = {
-    @tailrec def loop(): Option[T] = {
-      try {
-        return Some(request.execute())
-      } catch {
-        case e: GoogleJsonResponseException if acceptableResponseCodes contains e.getDetails.getCode =>
-          return None
-        case ioError: java.io.IOException =>
-          logger.error(s"Encountered a network exception: (${ioError.getClass}) ${ioError.getMessage}")
+    private def executeAndAcceptResponseCodes[T](request: BigqueryRequest[T], acceptableResponseCode: Int): Option[T] = {
+
+      @tailrec
+      def loop(retries: Int): Option[T] = {
+        if (retries <= 0) {
+          throw new RuntimeException("Ran out of retries")
+        }
+
+        try {
+          return Some(request.execute())
+        } catch {
+          case e: GoogleJsonResponseException if acceptableResponseCode == e.getDetails.getCode =>
+            return None
+          case ioError: java.io.IOException =>
+            logger.error(s"Encountered a network exception: (${ioError.getClass}) ${ioError.getMessage}")
+        }
+
+        Thread.sleep(INSERT_TIMEOUT)
+        loop(retries - 1)
       }
-      Thread.sleep(5000)
-      loop()
-    }
-    loop()
+
+      loop(INSERT_RETRIES)
   }
 
   @tailrec
@@ -146,7 +155,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
                           content: AbstractInputStreamContent,
                           retries: Int): Job = {
     if (retries <= 0) {
-      throw new RuntimeException("TODO: Figure out what to actually throw!")
+      throw new RuntimeException("Ran out of retries while sending insert job")
     }
 
     try {
