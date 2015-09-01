@@ -16,10 +16,8 @@ class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "RECORD"
 
-  // Parses points in the form "{long},{lat}"
-  // Points aren't actually returned as "{long},{lat}" from bigquery, but we encode them to satisfy
-  // BigQueryReadRep's interface.
   override def SoQL(row: Seq[String]): SoQLValue = {
+    // GeoJSON format is (long, lat)
     val y = row(0)
     val x = row(1)
     if (x == null || y == null) SoQLNull
@@ -42,7 +40,7 @@ class PointRep extends BigQueryRep[SoQLType, SoQLValue] {
   }
 
   override def jvalue(value: SoQLValue): JValue = {
-    if (value == null) JObject(Map(
+    if (value == SoQLNull) JObject(Map(
       "lat" -> JNull,
       "long" -> JNull
     ))
