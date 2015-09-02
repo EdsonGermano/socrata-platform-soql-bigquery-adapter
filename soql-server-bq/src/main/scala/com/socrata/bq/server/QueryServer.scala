@@ -216,9 +216,9 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
   ): QueryResult = {
     import Sqlizer._
 
-    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
+    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, datasetInfo: DatasetInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
       // TODO: Why are we accessing truth? Why do we need the obfuscation key? Do we need to keep the PGU Universe?
-      val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+      val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
@@ -278,7 +278,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
                             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            val (qrySchema, version, results) = runQuery(pgu, copy, analysis, rowCount)
+            val (qrySchema, version, results) = runQuery(pgu, copy, datasetInfo, analysis, rowCount)
             Success(qrySchema, copy.copyNumber, version, results, etag, lastModified)
         }
       case FailedBecauseMatch(etags) =>

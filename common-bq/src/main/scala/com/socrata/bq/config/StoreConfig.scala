@@ -15,8 +15,12 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
 
   val database = new DataSourceConfig(config, path("database"))
 
+  private val bigqueryConfig = config.getConfig("bigquery")
+  val projectId = bigqueryConfig.getString("project-id")
+  val datasetId = bigqueryConfig.getString("dataset-id")
+
   val tablespace = optionally(getString("tablespace"))
 
-  val resyncBatchSize = optionally(getInt("resyncBatchSize")).getOrElse(1000)
+  val resyncConfig = config.getConfig("resync-handler")
 
 }

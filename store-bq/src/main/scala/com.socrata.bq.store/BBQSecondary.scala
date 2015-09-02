@@ -9,8 +9,10 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
+import com.socrata.bq.SecondaryBase
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.ds.PGSimpleDataSource
@@ -19,13 +21,13 @@ import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
 
-class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
+class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
 
-  private val BQ_PROJECT_ID = config.getConfig("bigquery").getString("project-id")
-  private val BQ_DATASET_ID = config.getConfig("bigquery").getString("dataset-id")
+  val storeConfig = new StoreConfig(config, "")
+
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
-  logger.debug(s"Using project ${BQ_PROJECT_ID} with dataset ${BQ_DATASET_ID}")
+  logger.debug(s"Using project ${storeConfig.projectId} with dataset ${storeConfig.datasetId}")
 
   private val bigquery = {
     var credential: GoogleCredential = GoogleCredential.getApplicationDefault
@@ -35,11 +37,13 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     new Bigquery.Builder(TRANSPORT, JSON_FACTORY, credential).setApplicationName("BBQ Secondary").build()
   }
 
-  private val dsInfo = dataSourceFromConfig(new DataSourceConfig(config, "database"))
+  private val dsInfo = dataSourceFromConfig(storeConfig.database)
 
-  private val bigqueryUtils = new BigqueryUtils(dsInfo, BQ_PROJECT_ID)
+  override val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)
 
-  private val resyncHandler = new BBQResyncHandler(config.getConfig("resync-handler"), bigquery, BQ_PROJECT_ID, BQ_DATASET_ID)
+  private val bigqueryUtils = new BigqueryUtils(dsInfo, storeConfig.projectId)
+
+  private val resyncHandler = new BBQResyncHandler(storeConfig.resyncConfig, bigquery, storeConfig.projectId, storeConfig.datasetId)
 
   // called on graceful shutdown
   override def shutdown(): Unit = {
@@ -48,29 +52,46 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def dropDataset(datasetInternalName: String, cookie: Cookie): Unit = {
     logger.info(s"dropDataset called on $datasetInternalName")
-    val currentCopyNum = currentCopyNumber(datasetInternalName, cookie)
-    logger.info(s"Calling dropCopy on copies 1 through $currentCopyNum")
-    for (i <- 1 to currentCopyNum.toInt) {
-      dropCopy(datasetInternalName, i.toLong, cookie)
+    // The following block (except _dropCopy) was extracted from PGSecondary
+    withPgu(dsInfo, None) { pgu =>
+      truthCopyInfo(pgu, datasetInternalName) match {
+        case Some(copyInfo) =>
+          pgu.datasetMapWriter.delete(copyInfo.datasetInfo)
+          pgu.commit()
+          _dropCopy(datasetInternalName, copyInfo.copyNumber)
+        case None =>
+          // TODO: Clean possible orphaned dataset internal name map
+          logger.warn("drop dataset called but cannot find a copy {}", datasetInternalName)
+      }
     }
   }
 
   override def snapshots(datasetInternalName: String, cookie: Cookie): Set[Long] = ???
 
   override def dropCopy(datasetInternalName: String, copyNumber: Long, cookie: Cookie): Cookie = {
-    logger.info(s"dropCopy called on $datasetInternalName/$copyNumber")
+    // PGSecondary doesn't implement this, so we won't either
+    logger.warn(s"TODO: dropCopy '${datasetInternalName}' (cookie: ${cookie}})")
+    cookie
+  }
+
+  private def _dropCopy(datasetInternalName, copyNumber) {
     try {
-      bigquery.tables().delete(BQ_PROJECT_ID, BQ_DATASET_ID, bigqueryUtils.makeTableName(datasetInternalName, copyNumber)).execute()
+      bigquery.tables().delete(storeConfig.projectId, storeConfig.datasetId, bigqueryUtils.makeTableName(datasetInternalName, copyNumber)).execute()
     } catch {
       case e: GoogleJsonResponseException if e.getDetails.getCode == 404 =>
       case _: Throwable => logger.info(s"Encountered an error while deleting $datasetInternalName/$copyNumber")
     }
-    cookie
   }
 
   override def currentCopyNumber(datasetInternalName: String, cookie: Cookie): Long = {
-    val datasetId = parseDatasetId(datasetInternalName)
-    bigqueryUtils.getCopyNumber(datasetId).getOrElse(0)
+    withPgu(dsInfo, None) { pgu =>
+      truthCopyInfo(pgu, datasetInternalName) match {
+        case Some(copyInfo) => copyInfo.copyNumber
+        case None => 
+          logger.warn("current copy number called but cannot find a copy {}", datasetInternalName)
+          0
+      }
+    }
   }
 
   override def wantsWorkingCopies: Boolean = {
@@ -79,8 +100,14 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
-    val datasetId = parseDatasetId(datasetInternalName)
-    bigqueryUtils.getDataVersion(datasetId).getOrElse(0)
+    withPgu(dsInfo, None) { pgu =>
+      truthCopyInfo(pgu, datasetInternalName) match {
+        case Some(copyInfo) => copyInfo.dataVersion
+      case None =>
+        logger.warn("current version called but cannot find a copy {}", datasetInternalName)
+        0
+      }
+    }
   }
 
   override def resync(datasetInfo: DatasetInfo,
@@ -89,16 +116,19 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       cookie: Secondary.Cookie,
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
-    val datasetId = parseDatasetId(datasetInfo.internalName)
+    withPgu(dsInfo, Some(datasetInfo)) { pgu =>
+      pgu.datasetMapWriter.deleteCopy(copyInfo)
+      pgu.datasetMapWriter.unsafeCreateCopy(datasetInfo, copyInfo.systemId, copyInfo.copyNumber, LifecycleStage.Published, copyInfo.dataVersion)
+      pgu.commit()
+    }
     resyncHandler.handle(datasetInfo, copyInfo, schema, rows)
-    bigqueryUtils.setCopyInfoEntry(datasetId, copyInfo)
     cookie
   }
 
   override def version(datasetInfo: DatasetInfo,
-              dataVersion: Long,
-              cookie: Cookie,
-              events: Iterator[Event[SoQLType, SoQLValue]]): Cookie = {
+                       dataVersion: Long,
+                       cookie: Cookie,
+                       events: Iterator[Event[SoQLType, SoQLValue]]): Cookie = {
     val internalName = datasetInfo.internalName
     logger.info(s"version called for dataset ${internalName}@${dataVersion}")
 
@@ -113,8 +143,13 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     cookie
   }
 
-  private def parseDatasetId(datasetInternalName: String) = {
-    datasetInternalName.split('.')(1).toInt
+  private def truthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInternalName: String): Option[TruthCopyInfo] = {
+    for {
+      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInternalName)
+      truthDatasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+    } yield {
+      pgu.datasetMapReader.latest(truthDatasetInfo)
+    }
   }
 
   private def dataSourceFromConfig(config: DataSourceConfig): DSInfo = {

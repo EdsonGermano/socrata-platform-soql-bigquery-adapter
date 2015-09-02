@@ -31,8 +31,13 @@ import com.google.api.services.bigquery.model._
 class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
 
   private val copyInfoTable = "bbq_copy_info"
-  private val createTableStatement =
-    s"CREATE TABLE IF NOT EXISTS $copyInfoTable ( dataset_id integer PRIMARY KEY, copy_number integer, data_version integer );"
+  private val createTableStatement = s"""
+    |CREATE TABLE IF NOT EXISTS $copyInfoTable (
+    |  dataset_id integer PRIMARY KEY,
+    |  copy_number integer,
+    |  data_version integer,
+    |  obfuscation_key bytea
+    |);""".stripMargin.trim
 
   def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = 
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
@@ -68,7 +73,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     None
   }
 
-  def setCopyInfoEntry(datasetId: Long, copyInfo: SecondaryCopyInfo) = {
+  def setMetadataEntry(datasetId: Long, copyInfo: SecondaryCopyInfo, obfuscationKey: Array[Byte]) = {
     for (conn <- managed(getConnection())) {
       val stmt = conn.createStatement()
       val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
