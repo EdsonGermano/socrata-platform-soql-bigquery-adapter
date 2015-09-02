@@ -9,7 +9,7 @@ import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
 import collection.JavaConversions._
 import com.rojoma.simplearm.Managed
 import com.socrata.soql.types._
-import com.socrata.bq.config.StoreConfig
+import com.socrata.bq.config.{BBQStoreConfig}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
@@ -29,7 +29,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   logger.info(s"config: ${config.toString}")
 
-  val storeConfig = new StoreConfig(config, "")
+  val storeConfig = new BBQStoreConfig(config, "")
 
   private val TRANSPORT = new NetHttpTransport()
   private val JSON_FACTORY = new JacksonFactory()
