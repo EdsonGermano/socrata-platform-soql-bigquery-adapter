@@ -30,14 +30,29 @@ import com.google.api.services.bigquery.model._
 
 class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
 
-  private val copyInfoTable = "bbq_copy_info"
-  private val createTableStatement = s"""
+  private val copyInfoTable = "bbq_copy_info_2"
+  private val columnMapTable = "bbq_column_map"
+  private val bbqCopyInfoCreateTableStatement = s"""
     |CREATE TABLE IF NOT EXISTS $copyInfoTable (
     |  dataset_id integer PRIMARY KEY,
     |  copy_number integer,
     |  data_version integer,
     |  obfuscation_key bytea
-    |);""".stripMargin.trim
+    |);
+    """.stripMargin.trim
+
+  private val bbqColumnMapCreateTableStatement = s"""
+    |CREATE TABLE IF NOT EXISTS $columnMapTable (
+    |  system_id bigint,
+    |  dataset_id bigint,
+    |  user_column_id string,
+    |  type_name string,
+    |  is_system_primary_key boolean,
+    |  is_user_primary_key boolean,
+    |  is_version boolean,
+    |  PRIMARY KEY(dataset_id, system_id)
+    |);
+    """.stripMargin.trim
 
   def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = 
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
@@ -45,7 +60,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     
   def getCopyNumber(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
-      conn.createStatement().execute(createTableStatement)
+      conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
       val query = s"SELECT copy_number FROM $copyInfoTable WHERE dataset_id=$datasetId;"
       val stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)
       val resultSet = stmt.executeQuery(query)
@@ -60,7 +75,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
 
   def getDataVersion(datasetId: Long): Option[Long] = {
     for (conn <- managed(getConnection())) {
-      conn.createStatement().execute(createTableStatement)
+      conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
       val query = s"SELECT data_version FROM $copyInfoTable WHERE dataset_id=$datasetId;"
       val stmt = conn.createStatement()
       val resultSet = stmt.executeQuery(query)
@@ -73,22 +88,48 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     None
   }
 
+  def getObfuscationKey(datasetId: Long): Option[Array[Byte]] = {
+    for (conn <- managed(getConnection())) {
+      conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
+      val query = s"SELECT obfuscation_key FROM $copyInfoTable WHERE dataset_id=$datasetId;"
+      val stmt = conn.createStatement()
+      val resultSet = stmt.executeQuery(query)
+      if (resultSet.next()) {
+        // result set has a row
+        val obfuscationKey = resultSet.getBytes("obfuscation_key")
+        return Some(obfuscationKey)
+      }
+    }
+    None
+  }
+
   def setMetadataEntry(datasetId: Long, copyInfo: SecondaryCopyInfo, obfuscationKey: Array[Byte]) = {
     for (conn <- managed(getConnection())) {
       val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
       val stmt = conn.prepareStatement(s"""
         |BEGIN;
-        |$createTableStatement
+        |$bbqCopyInfoCreateTableStatement
         |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
         |UPDATE ${copyInfoTable}
-        |  SET (copy_number, data_version, obfuscation_key) = ('$copyNumber', '$version', '?') WHERE dataset_id='$id';
+        |  SET (copy_number, data_version, obfuscation_key) = ('$copyNumber', '$version', ?) WHERE dataset_id='$id';
         |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version, obfuscation_key)
-        |  SELECT $id, $copyNumber, $version, '?'
+        |  SELECT $id, $copyNumber, $version, ?
         |  WHERE NOT EXISTS ( SELECT 1 FROM ${copyInfoTable} WHERE dataset_id='$id' );
         |COMMIT;""".stripMargin.trim)
       stmt.setBytes(1, obfuscationKey)
       stmt.setBytes(2, obfuscationKey)
       stmt.executeUpdate()
+    }
+  }
+
+  def setSchema(datasetId: Long, schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]]) = {
+    for (conn <- managed(getConnection())) {
+      val stmt = conn.prepareStatement(
+      // TODO: Set the schema
+        s"""
+           |
+           |
+         """.stripMargin.trim)
     }
   }
   
@@ -99,8 +140,8 @@ object BigqueryUtils extends BigqueryUtilsBase
 
 class BigqueryUtilsBase extends Logging {
 
-  private def parseDatasetId(datasetInternalName: String): Int = {
-    datasetInternalName.split('.')(1).toInt
+  def parseDatasetId(datasetInternalName: String): Long = {
+    datasetInternalName.split('.')(1).toLong
   }
 
   def makeTableName(datasetInternalName: String, copyNumber: Long): String = {

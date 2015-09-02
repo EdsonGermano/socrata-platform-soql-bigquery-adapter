@@ -33,6 +33,7 @@ import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.bq.{SecondaryBase, Version}
+import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.bq.Schema._
 import com.socrata.bq.query.{EmptyIt, DataSqlizerQuerier, RowCount, RowReaderQuerier}
 import com.socrata.bq.server.config.{DynamicPortMap, QueryServerConfig}
@@ -149,10 +150,10 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
-    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
+//    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
 
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, req.precondition, req.dateTimeHeader("If-Modified-Since"))
+    streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -162,40 +163,34 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
    */
   def streamQueryResults(
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
-    datasetId:String,
+    datasetName:String,
     reqRowCount: Boolean,
     copy: Option[String],
-    rollupName: Option[RollupName],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
     // TODO: Factor out PGU and replace with BigQueryUtils functions, make linear
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
-        case Some(dsId) =>
-          pgu.datasetMapReader.datasetInfo(dsId) match {
-            case Some(datasetInfo) =>
-              def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
+      val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
+      pgu.datasetMapReader.datasetInfo(datasetId) match {
+        case Some(datasetInfo) =>
+          def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
-              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, rollupName, precondition, ifModifiedSince) match {
-                case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
-                  // Very weird separation of concerns between execQuery and streaming. Most likely we will
-                  // want yet-another-refactoring where much of execQuery is lifted out into this function.
-                  // This will significantly change the tests; however.
-                  logger.info("Success, writing results with CJSONWriter")
-                  ETag(etag)(resp)
-                  copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
-                  rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
-                  for (r <- results) yield {
-                    CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
-                  }
-                case NotModified(etags) =>
-                  notModified(etags)(resp)
-                case PreconditionFailed =>
-                  responses.PreconditionFailed(resp)
+          execQuery(pgu, datasetName, datasetId, datasetInfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+            case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
+              // Very weird separation of concerns between execQuery and streaming. Most likely we will
+              // want yet-another-refactoring where much of execQuery is lifted out into this function.
+              // This will significantly change the tests; however.
+              logger.info("Success, writing results with CJSONWriter")
+              ETag(etag)(resp)
+              copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
+              for (r <- results) yield {
+                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
               }
-            case None =>
-              NotFound(resp)
+            case NotModified(etags) =>
+              notModified(etags)(resp)
+            case PreconditionFailed =>
+              responses.PreconditionFailed(resp)
           }
         case None =>
           NotFound(resp)
@@ -206,11 +201,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
   def execQuery(
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
+    datasetId: DatasetId,
     datasetInfo: DatasetInfo,
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     rowCount: Boolean,
     reqCopy: Option[String],
-    rollupName: Option[RollupName],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
@@ -218,7 +213,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
       // TODO: Why are we accessing truth? Why do we need the obfuscation key? Do we need to keep the PGU Universe?
-      val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+      val cryptProvider = new CryptProvider(bqUtils.getObfuscationKey(datasetId.underlying).get)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
@@ -230,7 +225,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val bqReps = generateReps(analysis)
-        val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
+        val querier = this.readerWithQuery(pgu.conn, pgu, latestCopy, baseSchema)
         val qrySchema = querySchema(analysis, latestCopy)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
@@ -241,7 +236,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         }
 
         // Use the Utils to request the appropriate table name for the given internal dataset name
-        val copyNumberOption = bqUtils.getCopyNumber(datasetInfo.systemId.underlying)
+        val copyNumberOption = bqUtils.getCopyNumber(datasetId.underlying)
 
         // Determine whether copyNumber is 0 or not
         // Return empty (do not perform query) if copyNumber is 0
@@ -290,22 +285,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
 
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                                                   copyCtx: DatasetCopyContext[SoQLType],
-                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]],
-                                                   rollupName: Option[RollupName]):
+                                                   copyInfo: CopyInfo,
+                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]]):
     PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
 
-    val tableName = rollupName match {
-      case Some(r) =>
-        logger.debug("RollupName was Some(r)")
-        val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r).getOrElse {
-          throw new RuntimeException(s"Rollup ${rollupName} not found for copy ${copyCtx.copyInfo} ")
-        }
-        RollupManager.rollupTableName(rollupInfo, copyCtx.copyInfo.dataVersion)
-      case None =>
-        logger.debug("RollupName was None")
-        copyCtx.copyInfo.dataTableName
-    }
+    val tableName = copyInfo.dataTableName
 
     new PGSecondaryRowReader[SoQLType, SoQLValue] (
       conn,
