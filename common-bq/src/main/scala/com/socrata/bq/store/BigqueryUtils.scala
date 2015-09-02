@@ -75,19 +75,20 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
 
   def setMetadataEntry(datasetId: Long, copyInfo: SecondaryCopyInfo, obfuscationKey: Array[Byte]) = {
     for (conn <- managed(getConnection())) {
-      val stmt = conn.createStatement()
       val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
-      val query = s"""
-              |BEGIN;
-              |$createTableStatement
-              |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
-              |UPDATE ${copyInfoTable}
-              |  SET (copy_number, data_version) = ('$copyNumber', '$version') WHERE dataset_id='$id';
-              |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version)
-              |  SELECT $id, $copyNumber, $version
-              |  WHERE NOT EXISTS ( SELECT 1 FROM bbq_copy_info WHERE dataset_id='$id' );
-              |COMMIT;""".stripMargin.trim
-      stmt.executeUpdate(query)
+      val stmt = conn.prepareStatement(s"""
+        |BEGIN;
+        |$createTableStatement
+        |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
+        |UPDATE ${copyInfoTable}
+        |  SET (copy_number, data_version, obfuscation_key) = ('$copyNumber', '$version', '?') WHERE dataset_id='$id';
+        |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version, obfuscation_key)
+        |  SELECT $id, $copyNumber, $version, '?'
+        |  WHERE NOT EXISTS ( SELECT 1 FROM ${copyInfoTable} WHERE dataset_id='$id' );
+        |COMMIT;""".stripMargin.trim)
+      stmt.setBytes(1, obfuscationKey)
+      stmt.setBytes(2, obfuscationKey)
+      stmt.executeUpdate()
     }
   }
   
