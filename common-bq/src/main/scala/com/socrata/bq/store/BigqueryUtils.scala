@@ -2,8 +2,10 @@ package com.socrata.bq.store
 
 import java.sql.ResultSet
 
+import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.service.SchemaFinder
-import com.socrata.datacoordinator.truth.metadata.Schema
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, Schema}
+import com.socrata.datacoordinator.util.NullCache
 import com.socrata.soql.environment.TypeName
 
 import collection.JavaConversions._
@@ -58,6 +60,8 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     |);
     """.stripMargin.trim
 
+  private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
+
     def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) =
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
 
@@ -83,7 +87,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
       val query = s"SELECT data_version FROM $copyInfoTable WHERE dataset_id=$datasetId;"
       val stmt = conn.createStatement()
       val resultSet = stmt.executeQuery(query)
-      if (resultSet.first()) {
+      if (resultSet.next()) {
         // result set has a row
         val dataVersion = resultSet.getInt("data_version")
         return Some(dataVersion)
@@ -168,18 +172,38 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
            |WHERE dataset_id='$datasetId';
          """.stripMargin.trim
       val resultSet = stmt.executeQuery(query)
-      var idMap = UserColumnIdMap.empty[TypeName]
+      var userColumnIdMap = UserColumnIdMap.empty[TypeName]
+      var columnIds = Seq.empty[(UserColumnId, SoQLType)]
       var systemPrimaryKey: UserColumnId = new UserColumnId(":id") // in case we aren't storing the system pk
+      var userPrimaryKey: Option[UserColumnId] = None
 
       while (resultSet.next()) {
         logger.debug("ResultSet has rows")
-        idMap += (new UserColumnId(resultSet.getString("user_column_id")), new TypeName(resultSet.getString("type_name")))
+        val userColumnId = resultSet.getString("user_column_id")
+        val typeName = new TypeName(resultSet.getString("type_name"))
+        val soqlType = SoQLType.typesByName.getOrElse(typeName, SoQLNull)
+        val isSystemPrimaryKey = resultSet.getBoolean("is_system_primary_key")
+        val isUserPrimaryKey = resultSet.getBoolean("is_user_primary_key")
 
-        if (resultSet.getBoolean("is_system_primary_key"))
-          systemPrimaryKey = new UserColumnId(resultSet.getString("user_column_id"))
+        // Build up the user column id map and the column id map
+        userColumnIdMap += (new UserColumnId(userColumnId), typeName)
+        columnIds :+= (new UserColumnId(userColumnId), soqlType)
+
+        if (isSystemPrimaryKey)
+          systemPrimaryKey = new UserColumnId(userColumnId)
+
+        if (isUserPrimaryKey)
+          userPrimaryKey = Some(new UserColumnId(userColumnId))
       }
-      val schema = new Schema("hash", idMap, systemPrimaryKey, "locale")
-      return Some(schema)
+
+      // Ensure that we built up a user column id map before attempting to construct the schema
+      if (!userColumnIdMap.isEmpty) {
+        val version = getDataVersion(datasetId).get
+        val pk = userPrimaryKey.getOrElse(systemPrimaryKey)
+        val hash = schemaHasher.schemaHash(datasetId, version, columnIds, pk, "en_US") // TODO: get locale string
+        val schema = new Schema(hash, userColumnIdMap, systemPrimaryKey, "en_US") // TODO: get locale string
+        return Some(schema)
+      }
     }
     None
   }
