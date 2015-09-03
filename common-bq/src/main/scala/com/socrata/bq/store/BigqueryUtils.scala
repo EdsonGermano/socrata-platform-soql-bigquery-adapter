@@ -3,8 +3,7 @@ package com.socrata.bq.store
 import java.sql.ResultSet
 
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.service.SchemaFinder
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, Schema}
+import com.socrata.datacoordinator.truth.metadata.{Schema}
 import com.socrata.datacoordinator.util.NullCache
 import com.socrata.soql.environment.TypeName
 
@@ -12,37 +11,26 @@ import collection.JavaConversions._
 
 import com.socrata.bq.soql.BigQueryRepFactory
 
-import com.rojoma.json.v3.ast._
-import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.simplearm.util._
-import com.rojoma.simplearm.Managed
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.util.collection.{UserColumnIdMap, ColumnIdMap}
-import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
-import com.socrata.datacoordinator.id.{CopyId, ColumnId, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.typesafe.scalalogging.slf4j.Logging
-import org.postgresql.ds.PGSimpleDataSource
 
-import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
-import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.client.http.ByteArrayContent
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.jackson2.JacksonFactory
-import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
 import com.google.api.services.bigquery.model._
 
 class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
 
-  private val copyInfoTable = "bbq_copy_info_2"
+  private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
   private val bbqCopyInfoCreateTableStatement = s"""
     |CREATE TABLE IF NOT EXISTS $copyInfoTable (
     |  dataset_id integer PRIMARY KEY,
     |  copy_number integer,
     |  data_version integer,
+    |  locale character varying(40),
     |  obfuscation_key bytea
     |);
     """.stripMargin.trim
@@ -111,21 +99,39 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     None
   }
 
-  def setMetadataEntry(datasetId: Long, copyInfo: SecondaryCopyInfo, obfuscationKey: Array[Byte]) = {
+  def getLocale(datasetId: Long): Option[String] = {
     for (conn <- managed(getConnection())) {
-      val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
-      val stmt = conn.prepareStatement(s"""
-        |BEGIN;
-        |$bbqCopyInfoCreateTableStatement
-        |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
-        |UPDATE ${copyInfoTable}
-        |  SET (copy_number, data_version, obfuscation_key) = ('$copyNumber', '$version', ?) WHERE dataset_id='$id';
-        |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version, obfuscation_key)
-        |  SELECT $id, $copyNumber, $version, ?
-        |  WHERE NOT EXISTS ( SELECT 1 FROM ${copyInfoTable} WHERE dataset_id='$id' );
-        |COMMIT;""".stripMargin.trim)
-      stmt.setBytes(1, obfuscationKey)
-      stmt.setBytes(2, obfuscationKey)
+      conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
+      val query = s"SELECT locale FROM $copyInfoTable WHERE dataset_id=$datasetId;"
+      val stmt = conn.createStatement()
+      val resultSet = stmt.executeQuery(query)
+      if (resultSet.next()) {
+        // result set has a row
+        val locale = resultSet.getString("locale")
+        return Some(locale)
+      }
+    }
+    None
+  }
+
+  def setMetadataEntry(datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = {
+    val id = parseDatasetId(datasetInfo.internalName)
+    val (copyNumber, version, locale, obfuscationKey) = (copyInfo.copyNumber, copyInfo.dataVersion, datasetInfo.localeName, datasetInfo.obfuscationKey)
+    for (conn <- managed(getConnection())) {
+      val query = s"""
+          |BEGIN;
+          |$bbqCopyInfoCreateTableStatement
+          |LOCK TABLE $copyInfoTable IN SHARE MODE;
+          |UPDATE $copyInfoTable
+          |  SET (copy_number, data_version, locale, obfuscation_key) = ('$copyNumber', '$version', '$locale', ?) WHERE dataset_id='$id';
+          |INSERT INTO $copyInfoTable (dataset_id, copy_number, data_version, locale, obfuscation_key)
+          |  SELECT '$id', '$copyNumber', '$version', '$locale', ?
+          |  WHERE NOT EXISTS ( SELECT 1 FROM $copyInfoTable WHERE dataset_id='$id' );
+          |COMMIT;""".stripMargin.trim
+      logger.info(s"Set metadata query: $query")
+      val stmt = conn.prepareStatement(query)
+      stmt.setBytes(1, datasetInfo.obfuscationKey)
+      stmt.setBytes(2, datasetInfo.obfuscationKey)
       stmt.executeUpdate()
     }
   }
@@ -198,23 +204,16 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
 
       // Ensure that we built up a user column id map before attempting to construct the schema
       if (!userColumnIdMap.isEmpty) {
-        val version = getDataVersion(datasetId).get
+        val version = getDataVersion(datasetId).getOrElse(0L)
+        val locale = getLocale(datasetId).getOrElse("en_US")
         val pk = userPrimaryKey.getOrElse(systemPrimaryKey)
-        val hash = schemaHasher.schemaHash(datasetId, version, columnIds, pk, "en_US") // TODO: get locale string
-        val schema = new Schema(hash, userColumnIdMap, systemPrimaryKey, "en_US") // TODO: get locale string
+        val hash = schemaHasher.schemaHash(datasetId, version, columnIds, pk, locale)
+        val schema = new Schema(hash, userColumnIdMap, systemPrimaryKey, locale)
         return Some(schema)
       }
     }
     None
   }
-
-//  system_id bigint,
-//  dataset_id bigint,
-//  user_column_id string,
-//  type_name string,
-//  is_system_primary_key boolean,
-//  is_user_primary_key boolean,
-//  is_version boolean,
   
   private def getConnection() = dsInfo.dataSource.getConnection()
 }

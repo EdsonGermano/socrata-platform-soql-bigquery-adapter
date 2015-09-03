@@ -77,7 +77,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def currentCopyNumber(datasetInternalName: String, cookie: Cookie): Long = {
-    val datasetId = parseDatasetId(datasetInternalName)
+    val datasetId = bigqueryUtils.parseDatasetId(datasetInternalName)
     bigqueryUtils.getCopyNumber(datasetId).getOrElse(0)
   }
 
@@ -87,7 +87,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
-    val datasetId = parseDatasetId(datasetInternalName)
+    val datasetId = bigqueryUtils.parseDatasetId(datasetInternalName)
     bigqueryUtils.getDataVersion(datasetId).getOrElse(0)
   }
 
@@ -97,9 +97,9 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       cookie: Secondary.Cookie,
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
-    val datasetId = parseDatasetId(datasetInfo.internalName)
+    val datasetId = bigqueryUtils.parseDatasetId(datasetInfo.internalName)
     resyncHandler.handle(datasetInfo, copyInfo, schema, rows)
-    bigqueryUtils.setMetadataEntry(datasetId, copyInfo, datasetInfo.obfuscationKey)
+    bigqueryUtils.setMetadataEntry(datasetInfo, copyInfo)
     bigqueryUtils.setSchema(datasetId, schema)
     cookie
   }
@@ -120,10 +120,6 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     }
 
     cookie
-  }
-
-  private def parseDatasetId(datasetInternalName: String): Long = {
-    datasetInternalName.split('.')(1).toInt
   }
 
   private def dataSourceFromConfig(config: DataSourceConfig): DSInfo = {
