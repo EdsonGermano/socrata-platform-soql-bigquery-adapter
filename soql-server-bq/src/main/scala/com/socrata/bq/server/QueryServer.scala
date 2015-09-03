@@ -101,13 +101,14 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     val ds = servReq.getParameter("ds")
     val copy = Option(servReq.getParameter("copy"))
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      getCopy(pgu, ds, copy) match {
-        case Some(copyInfo) =>
-          val schema = getSchema(pgu, copyInfo)
+      getSchema(ds) match {
+        case Some(schemaResult) =>
+          logger.debug(s"Found dataset $ds")
           OK ~>
-            copyInfoHeader(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
-            Write(JsonContentType)(JsonUtil.writeJson(_, schema, buffer = true))
+//            copyInfoHeader(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~> // TODO: this header
+            Write(JsonContentType)(JsonUtil.writeJson(_, schemaResult, buffer = true))
         case None =>
+          logger.debug(s"Cannot find dataset $ds")
           NotFound
       }
     }
@@ -172,25 +173,30 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     // TODO: Factor out PGU and replace with BigQueryUtils functions, make linear
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
-      pgu.datasetMapReader.datasetInfo(datasetId) match {
-        case Some(datasetInfo) =>
+      bqUtils.getCopyNumber(datasetId.underlying) match {
+        case Some(copyNum) =>
+          pgu.datasetMapReader.datasetInfo(datasetId) match {
+          case Some(datasetInfo) =>
           def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
           execQuery(pgu, datasetName, datasetId, datasetInfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
-            case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
-              // Very weird separation of concerns between execQuery and streaming. Most likely we will
-              // want yet-another-refactoring where much of execQuery is lifted out into this function.
-              // This will significantly change the tests; however.
-              logger.info("Success, writing results with CJSONWriter")
-              ETag(etag)(resp)
-              copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
-              for (r <- results) yield {
-                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
-              }
-            case NotModified(etags) =>
-              notModified(etags)(resp)
-            case PreconditionFailed =>
-              responses.PreconditionFailed(resp)
+          case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
+            // Very weird separation of concerns between execQuery and streaming. Most likely we will
+            // want yet-another-refactoring where much of execQuery is lifted out into this function.
+            // This will significantly change the tests; however.
+          logger.info("Success, writing results with CJSONWriter")
+          ETag(etag)(resp)
+          copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
+          for (r <- results) yield {
+            CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
+          }
+          case NotModified(etags) =>
+            notModified(etags)(resp)
+          case PreconditionFailed =>
+            responses.PreconditionFailed(resp)
+          }
+          case None =>
+            NotFound(resp)
           }
         case None =>
           NotFound(resp)
@@ -385,9 +391,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
-  // TODO: this is never used
-  private def getSchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: CopyInfo): Schema = {
-    pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+  // Returns the schema the /schema API endpoint
+  private def getSchema(datasetName : String): Option[Schema] = {
+//    pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+    val datasetId = bqUtils.parseDatasetId(datasetName)
+    logger.debug(s"getSchema called on $datasetId")
+    bqUtils.getSchema(datasetId)
   }
 
   // TODO: this is no longer used

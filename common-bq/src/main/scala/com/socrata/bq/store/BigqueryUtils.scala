@@ -2,6 +2,10 @@ package com.socrata.bq.store
 
 import java.sql.ResultSet
 
+import com.socrata.datacoordinator.service.SchemaFinder
+import com.socrata.datacoordinator.truth.metadata.Schema
+import com.socrata.soql.environment.TypeName
+
 import collection.JavaConversions._
 
 import com.socrata.bq.soql.BigQueryRepFactory
@@ -11,7 +15,7 @@ import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.simplearm.util._
 import com.rojoma.simplearm.Managed
 import com.socrata.soql.types._
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.datacoordinator.util.collection.{UserColumnIdMap, ColumnIdMap}
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
@@ -45,8 +49,8 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     |CREATE TABLE IF NOT EXISTS $columnMapTable (
     |  system_id bigint,
     |  dataset_id bigint,
-    |  user_column_id string,
-    |  type_name string,
+    |  user_column_id character varying(40),
+    |  type_name character varying(40),
     |  is_system_primary_key boolean,
     |  is_user_primary_key boolean,
     |  is_version boolean,
@@ -54,7 +58,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     |);
     """.stripMargin.trim
 
-  def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = 
+    def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) =
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
 
     
@@ -124,14 +128,69 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
 
   def setSchema(datasetId: Long, schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]]) = {
     for (conn <- managed(getConnection())) {
-      val stmt = conn.prepareStatement(
-      // TODO: Set the schema
+      val stmt = conn.createStatement()
+
+      // Delete the currently stored schema for this dataset
+      val delete =
         s"""
-           |
-           |
-         """.stripMargin.trim)
-    }
+           |BEGIN;
+           |$bbqColumnMapCreateTableStatement
+           |LOCK TABLE $columnMapTable IN SHARE MODE;
+           |DELETE FROM $columnMapTable WHERE dataset_id = '$datasetId';
+         """.stripMargin.trim
+      stmt.execute(delete)
+
+      // Add the new schema
+      val update = conn.prepareStatement(s"INSERT INTO $columnMapTable VALUES (?, ?, ?, ?, ?, ?, ?)")
+      schema.foreach { (columnId, columnInfo) =>
+        update.setLong(1, columnId.underlying)
+        update.setLong(2, datasetId)
+        update.setString(3, columnInfo.id.underlying)
+        update.setString(4, columnInfo.typ.name.toString())
+        update.setBoolean(5, columnInfo.isSystemPrimaryKey)
+        update.setBoolean(6, columnInfo.isUserPrimaryKey)
+        update.setBoolean(7, columnInfo.isVersion)
+
+        update.execute()
+      }
+
+      conn.createStatement().execute("COMMIT;")
+      }
   }
+
+  def getSchema(datasetId: Long): Option[Schema] = {
+    for (conn <- managed(getConnection())) {
+      val stmt = conn.createStatement()
+      val query =
+        s"""
+           |SELECT system_id, user_column_id, type_name, is_system_primary_key, is_user_primary_key, is_version
+           |FROM $columnMapTable
+           |WHERE dataset_id='$datasetId';
+         """.stripMargin.trim
+      val resultSet = stmt.executeQuery(query)
+      var idMap = UserColumnIdMap.empty[TypeName]
+      var systemPrimaryKey: UserColumnId = new UserColumnId(":id") // in case we aren't storing the system pk
+
+      while (resultSet.next()) {
+        logger.debug("ResultSet has rows")
+        idMap += (new UserColumnId(resultSet.getString("user_column_id")), new TypeName(resultSet.getString("type_name")))
+
+        if (resultSet.getBoolean("is_system_primary_key"))
+          systemPrimaryKey = new UserColumnId(resultSet.getString("user_column_id"))
+      }
+      val schema = new Schema("hash", idMap, systemPrimaryKey, "locale")
+      return Some(schema)
+    }
+    None
+  }
+
+//  system_id bigint,
+//  dataset_id bigint,
+//  user_column_id string,
+//  type_name string,
+//  is_system_primary_key boolean,
+//  is_user_primary_key boolean,
+//  is_version boolean,
   
   private def getConnection() = dsInfo.dataSource.getConnection()
 }
