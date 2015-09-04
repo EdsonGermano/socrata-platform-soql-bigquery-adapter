@@ -88,7 +88,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def wantsWorkingCopies: Boolean = {
-    println("wantsWorkingCopies called")
+    logger.info("wantsWorkingCopies called")
     false
   }
 

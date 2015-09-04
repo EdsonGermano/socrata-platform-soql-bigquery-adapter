@@ -82,6 +82,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       case Some(s) =>
         s(req)
       case None =>
+        logger.info(s"Requested path not found: ${req.requestPath}")
         NotFound
     }
   }
@@ -156,7 +157,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     val copy = Option(servReq.getParameter("copy"))
 //    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
 
-    logger.info("Performing query on dataset " + datasetId)
+    logger.debug("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
@@ -174,6 +175,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
     // TODO: Factor out PGU and replace with BigQueryUtils functions, make linear
+    logger.debug(s"streamQueryResults called on dataset $datasetName")
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
       bqUtils.getCopyNumber(datasetId.underlying) match {
@@ -224,6 +226,8 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
       // TODO: Why are we accessing truth? Why do we need the obfuscation key? Do we need to keep the PGU Universe?
+
+      logger.debug(s"runQuery called on $datasetInternalName ($datasetId")
       val cryptProvider = new CryptProvider(bqUtils.getObfuscationKey(datasetId.underlying).get)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
@@ -272,6 +276,8 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       }
     }
 
+    logger.debug(s"execQuery called on $datasetInternalName ($datasetId")
+
     val copy = getCopy(pgu, datasetInfo, reqCopy)
     val etag = etagFromCopy(datasetInternalName, copy)
     val lastModified = copy.lastModified
@@ -299,6 +305,8 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
                                                    copyInfo: CopyInfo,
                                                    schema: ColumnIdMap[ColumnInfo[SoQLType]]):
     PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
+
+    logger.debug("readerWithQuery called")
 
     val tableName = copyInfo.dataTableName
 
