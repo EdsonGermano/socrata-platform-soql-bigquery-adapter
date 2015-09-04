@@ -147,6 +147,8 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
   }
 
   def query(req: HttpRequest): HttpServletResponse => Unit =  {
+    logger.debug("query called")
+
     val servReq = req.servletRequest
     val datasetId = servReq.getParameter("dataset")
     val analysisParam = servReq.getParameter("query")
