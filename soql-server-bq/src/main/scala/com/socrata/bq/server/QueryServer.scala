@@ -239,17 +239,19 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
       for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
-        val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
-        val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
+        val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema // TODO: relies on pgu
+        val systemToUserColumnMap = bqUtils.getSystemToUserColumnMap(datasetId.underlying).getOrElse {
+          sys.error("Could not obtain systemToUserColumnMap")
+        }
         val bqReps = generateReps(analysis)
-        val querier = this.readerWithQuery(pgu.conn, pgu, latestCopy, baseSchema)
-        val qrySchema = querySchema(analysis, latestCopy)
+        val querier = this.readerWithQuery(pgu.conn, pgu, latestCopy, baseSchema) // TODO: relies on pgu
+        val qrySchema = querySchema(analysis, latestCopy) // TODO: relies on pgu
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
         // Print the schema for this query
         logger.debug("Query schema: ")
         bqReps.foreach { case (k, v) =>
-          logger.debug(s"${k.toString}: ${v.repType.toString}")
+          logger.debug(s"$k: ${v.repType}")
         }
 
         // Use the Utils to request the appropriate table name for the given internal dataset name
@@ -271,9 +273,9 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
               bqReps,
               config.bigqueryProjectId,
               bqTableName)
-            (qrySchema, latestCopy.dataVersion, results)
+            (qrySchema, latestCopy.dataVersion, results) // TODO: relies on PGU
           }
-          case None => (qrySchema, latestCopy.dataVersion, managed(EmptyIt))
+          case None => (qrySchema, latestCopy.dataVersion, managed(EmptyIt)) // TODO: relies on PGU
         }
       }
     }

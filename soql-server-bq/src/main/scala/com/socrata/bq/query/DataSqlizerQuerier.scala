@@ -24,7 +24,7 @@ import scala.collection.mutable
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
-  def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
+  def query(analysis: SoQLAnalysis[UserColumnId, CT],
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
                reqRowCount: Boolean,

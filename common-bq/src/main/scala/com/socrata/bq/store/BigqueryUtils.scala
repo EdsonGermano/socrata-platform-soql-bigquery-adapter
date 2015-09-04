@@ -212,6 +212,25 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     }
     None
   }
+
+  def getSystemToUserColumnMap(datasetId: Long): Option[Map[ColumnId, UserColumnId]] = {
+    for (conn <- managed(getConnection())) {
+      val stmt = conn.createStatement()
+      val query = s"""SELECT system_id, user_column_id FROM $columnMapTable WHERE dataset_id='$datasetId';"""
+      val resultSet = stmt.executeQuery(query)
+      val systemToUserColumnMap = scala.collection.mutable.Map[ColumnId, UserColumnId]()
+
+      while (resultSet.next()) {
+        val columnId = resultSet.getInt("system_id")
+        val userColumnId = resultSet.getString("user_column_id")
+        systemToUserColumnMap += new ColumnId(columnId) -> new UserColumnId(userColumnId)
+      }
+      if (systemToUserColumnMap.nonEmpty) {
+        return Some(systemToUserColumnMap.toMap)
+      }
+    }
+    None
+  }
   
   private def getConnection() = dsInfo.dataSource.getConnection()
 }
