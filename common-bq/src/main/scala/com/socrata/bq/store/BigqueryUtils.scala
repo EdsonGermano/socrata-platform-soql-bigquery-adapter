@@ -128,7 +128,6 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
           |  SELECT '$id', '$copyNumber', '$version', '$locale', ?
           |  WHERE NOT EXISTS ( SELECT 1 FROM $copyInfoTable WHERE dataset_id='$id' );
           |COMMIT;""".stripMargin.trim
-      logger.info(s"Set metadata query: $query")
       val stmt = conn.prepareStatement(query)
       stmt.setBytes(1, datasetInfo.obfuscationKey)
       stmt.setBytes(2, datasetInfo.obfuscationKey)
@@ -184,7 +183,6 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
       var userPrimaryKey: Option[UserColumnId] = None
 
       while (resultSet.next()) {
-        logger.debug("ResultSet has rows")
         val userColumnId = resultSet.getString("user_column_id")
         val typeName = new TypeName(resultSet.getString("type_name"))
         val soqlType = SoQLType.typesByName.getOrElse(typeName, SoQLNull)

@@ -103,9 +103,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       getSchema(ds) match {
         case Some(schemaResult) =>
+          val datasetId = bqUtils.parseDatasetId(ds)
+          val copyNum: Long = bqUtils.getCopyNumber(datasetId).getOrElse(0)
+          val versionNum: Long = bqUtils.getDataVersion(datasetId).getOrElse(0)
           logger.debug(s"Found dataset $ds")
           OK ~>
-//            copyInfoHeader(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~> // TODO: this header
+            copyInfoHeader(copyNum, versionNum, new DateTime()) ~> // TODO: this header
             Write(JsonContentType)(JsonUtil.writeJson(_, schemaResult, buffer = true))
         case None =>
           logger.debug(s"Cannot find dataset $ds")
@@ -176,29 +179,31 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       bqUtils.getCopyNumber(datasetId.underlying) match {
         case Some(copyNum) =>
           pgu.datasetMapReader.datasetInfo(datasetId) match {
-          case Some(datasetInfo) =>
-          def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
+            case Some(datasetInfo) =>
+              def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
-          execQuery(pgu, datasetName, datasetId, datasetInfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
-          case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
-            // Very weird separation of concerns between execQuery and streaming. Most likely we will
-            // want yet-another-refactoring where much of execQuery is lifted out into this function.
-            // This will significantly change the tests; however.
-          logger.info("Success, writing results with CJSONWriter")
-          ETag(etag)(resp)
-          copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
-          for (r <- results) yield {
-            CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
-          }
-          case NotModified(etags) =>
-            notModified(etags)(resp)
-          case PreconditionFailed =>
-            responses.PreconditionFailed(resp)
-          }
-          case None =>
-            NotFound(resp)
+              execQuery(pgu, datasetName, datasetId, datasetInfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+                case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
+                  // Very weird separation of concerns between execQuery and streaming. Most likely we will
+                  // want yet-another-refactoring where much of execQuery is lifted out into this function.
+                  // This will significantly change the tests; however.
+                logger.info("Success, writing results with CJSONWriter")
+                ETag(etag)(resp)
+                copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
+                for (r <- results) yield {
+                  CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
+                }
+                case NotModified(etags) =>
+                  notModified(etags)(resp)
+                case PreconditionFailed =>
+                  responses.PreconditionFailed(resp)
+            }
+            case None =>
+              logger.debug(s"pgu.datasetMapReader broke on dataset $datasetId")
+              NotFound(resp)
           }
         case None =>
+          logger.debug(s"No copy number found for dataset $datasetId")
           NotFound(resp)
       }
     }

@@ -25,7 +25,7 @@ import org.postgresql.ds.PGSimpleDataSource
 
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
 
-  private val copyTable = "bbq_copy_info_2"
+  private val copyTable = "bbq_copy_info"
 
   logger.info(s"config: ${config.toString}")
 
@@ -77,8 +77,14 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def currentCopyNumber(datasetInternalName: String, cookie: Cookie): Long = {
+    logger.info(s"currentCopyNumber called for $datasetInternalName")
     val datasetId = bigqueryUtils.parseDatasetId(datasetInternalName)
-    bigqueryUtils.getCopyNumber(datasetId).getOrElse(0)
+    bigqueryUtils.getCopyNumber(datasetId) match {
+      case Some(copyNum) => copyNum
+      case None =>
+        logger.warn(s"Could not find current copy number for $datasetInternalName")
+        0
+    }
   }
 
   override def wantsWorkingCopies: Boolean = {
@@ -87,8 +93,14 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
+    logger.info(s"currentVersion called for $datasetInternalName")
     val datasetId = bigqueryUtils.parseDatasetId(datasetInternalName)
-    bigqueryUtils.getDataVersion(datasetId).getOrElse(0)
+    bigqueryUtils.getDataVersion(datasetId) match {
+      case Some(version) => version
+      case None =>
+        logger.warn(s"Could not find a version for $datasetInternalName")
+        0
+    }
   }
 
   override def resync(datasetInfo: DatasetInfo,
@@ -98,6 +110,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
     val datasetId = bigqueryUtils.parseDatasetId(datasetInfo.internalName)
+    logger.info(s"resync called for dataset ${datasetInfo.internalName} DatasetId($datasetId)")
     resyncHandler.handle(datasetInfo, copyInfo, schema, rows)
     bigqueryUtils.setMetadataEntry(datasetInfo, copyInfo)
     bigqueryUtils.setSchema(datasetId, schema)
@@ -109,7 +122,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                        cookie: Cookie,
                        events: Iterator[Event[SoQLType, SoQLValue]]): Cookie = {
     val internalName = datasetInfo.internalName
-    logger.info(s"version called for dataset ${internalName}@${dataVersion}")
+    logger.info(s"version called for dataset $internalName@$dataVersion")
 
     events.foreach {
       case WorkingCopyPublished => {
