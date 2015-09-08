@@ -178,6 +178,8 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
     // TODO: Factor out PGU and replace with BigQueryUtils functions, make linear
+    logger.info(s"analysis: ${analysis.toString()}")
+
     logger.debug(s"streamQueryResults called on dataset $datasetName")
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
@@ -233,7 +235,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit) // TODO: relies on pgu
 
 //        val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema // TODO: relies on pgu
-      val systemToUserColumnMap = bqUtils.getSystemToUserColumnMap(datasetId.underlying).getOrElse {
+      val userToSystemColumnMap = bqUtils.getUserToSystemColumnMap(datasetId.underlying).getOrElse {
         sys.error("Could not obtain systemToUserColumnMap")
       }
       val bqReps = generateReps(analysis)
@@ -256,11 +258,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       // Return empty (do not perform query) if copyNumber is 0
       copyNumberOption match {
         case Some(copyNumber) => {
-          val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName, copyNumber)}]"
+          val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName, copyNumber)}]" // TODO: Make bigquery utils function
           val results = managed(bqRowReader.query(
             analysis,
             (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-              new SoQLAnalysisSqlizer(a, tableName).sql(Seq.empty, sqlCtx, escape),
+              new SoQLAnalysisSqlizer(a, tableName).sql(userToSystemColumnMap.map { case (uid, cid) => uid -> bqUtils.makeColumnName(cid, uid) }, Seq.empty, sqlCtx, escape),
             rowCount,
             bqReps,
             new BigQueryQuerier(config.bigqueryProjectId),

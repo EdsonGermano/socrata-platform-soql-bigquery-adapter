@@ -18,7 +18,7 @@ object SqlFunctions {
 
   type FunCall = FunctionCall[UserColumnId, SoQLType]
 
-  type FunCallToSql = (FunCall, Seq[String], Sqlizer.Context, Escape) => BQSql
+  type FunCallToSql = (Map[UserColumnId, String], FunCall, Seq[String], Sqlizer.Context, Escape) => BQSql
 
   def apply(function: Function[SoQLType]) = funMap(function)
 
@@ -141,35 +141,38 @@ object SqlFunctions {
   private def passthrough: FunCallToSql = formatCall("%s")
 
   private def nary(fnName: String)
-                  (fn: FunCall,
+                  (physicalColumnMapping: Map[UserColumnId, String],
+                   fn: FunCall,
                    setParams: Seq[String],
                    ctx: Sqlizer.Context,
                    escape: Escape): BQSql = {
 
     val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
-      val BQSql(sql, newSetParams) = param.sql(acc._2, ctx, escape)
+      val BQSql(sql, newSetParams) = param.sql(physicalColumnMapping, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
     BQSql(sqlFragsAndParams._1.mkString(fnName + "(", ",", ")"), sqlFragsAndParams._2)
   }
 
   private def naryish(fnName: String)
-                     (fn: FunCall,
+                     (physicalColumnMapping: Map[UserColumnId, String],
+                      fn: FunCall,
                       setParams: Seq[String],
                       ctx: Sqlizer.Context,
                       escape: Escape): BQSql = {
 
-    val BQSql(head, setParamsHead) = fn.parameters.head.sql(setParams, ctx, escape)
+    val BQSql(head, setParamsHead) = fn.parameters.head.sql(physicalColumnMapping, setParams, ctx, escape)
 
     val sqlFragsAndParams = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
-      val BQSql(sql, newSetParams) = param.sql(acc._2, ctx, escape)
+      val BQSql(sql, newSetParams) = param.sql(physicalColumnMapping, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
 
     BQSql(sqlFragsAndParams._1.mkString(head + " " + fnName + "(", ",", ")"), sqlFragsAndParams._2)
   }
 
-  private def caseCall(fn: FunCall,
+  private def caseCall(physicalColumnMapping: Map[UserColumnId, String],
+                       fn: FunCall,
                        setParams: Seq[String],
                        ctx: Sqlizer.Context,
                        escape: Escape): BQSql = {
@@ -177,8 +180,8 @@ object SqlFunctions {
     val (sqls, params) = whenThens.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
       param match {
         case Seq(when, then) =>
-          val BQSql(whenSql, whenSetParams) = when.sql(acc._2, ctx, escape)
-          val BQSql(thenSql, thenSetParams) = then.sql(whenSetParams, ctx, escape)
+          val BQSql(whenSql, whenSetParams) = when.sql(physicalColumnMapping, acc._2, ctx, escape)
+          val BQSql(thenSql, thenSetParams) = then.sql(physicalColumnMapping, whenSetParams, ctx, escape)
           (acc._1 :+ s"WHEN $whenSql" :+ s"THEN $thenSql", thenSetParams)
         case _ =>
           throw new Exception("invalid case statement")
@@ -190,7 +193,8 @@ object SqlFunctions {
   }
 
   private def formatCall(template: String, paramPosition: Option[Seq[Int]] = None)
-                        (fn: FunCall,
+                        (physicalColumnMapping: Map[UserColumnId, String],
+                         fn: FunCall,
                          setParams: Seq[String],
                          ctx: Sqlizer.Context,
                          escape: Escape): BQSql = {
@@ -203,7 +207,7 @@ object SqlFunctions {
       case None => fn.parameters
     }
     val sqlFragsAndParams = fnParams.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
-      val BQSql(sql, newSetParams) = param.sql(acc._2, ctx, escape)
+      val BQSql(sql, newSetParams) = param.sql(physicalColumnMapping, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
 
@@ -229,7 +233,8 @@ object SqlFunctions {
   }
 
   private def decryptString(typ: SoQLType)
-                           (fn: FunCall,
+                           (physicalColumnMapping: Map[UserColumnId, String],
+                            fn: FunCall,
                             setParams: Seq[String],
                             ctx: Sqlizer.Context,
                             escape: Escape): BQSql = {
@@ -239,7 +244,7 @@ object SqlFunctions {
           val idRep = ctx(SqlizerContext.IdRep).asInstanceOf[SoQLIDRep]
           val verRep = ctx(SqlizerContext.VerRep).asInstanceOf[SoQLVersionRep]
           val numLit = decryptToNumLit(typ)(idRep, verRep, strLit)
-          val BQSql(sql, newSetParams) = numLit.sql(acc._2, ctx, escape)
+          val BQSql(sql, newSetParams) = numLit.sql(physicalColumnMapping, acc._2, ctx, escape)
           (acc._1 :+ sql, newSetParams)
         case unexpected =>
           throw new Exception("Row id is not string literal")
@@ -249,24 +254,26 @@ object SqlFunctions {
   }
 
   private def infix(fnName: String)
-                   (fn: FunCall,
+                   (physicalColumnMapping: Map[UserColumnId, String],
+                    fn: FunCall,
                     setParams: Seq[String],
                     ctx: Sqlizer.Context,
                     escape: Escape): BQSql = {
-    val BQSql(l, setParamsL) = fn.parameters.head.sql(setParams, ctx, escape)
-    val BQSql(r, setParamsLR) = fn.parameters(1).sql(setParamsL, ctx, escape)
+    val BQSql(l, setParamsL) = fn.parameters.head.sql(physicalColumnMapping, setParams, ctx, escape)
+    val BQSql(r, setParamsLR) = fn.parameters(1).sql(physicalColumnMapping, setParamsL, ctx, escape)
     val s = s"$l $fnName $r"
     BQSql(s, setParamsLR)
   }
 
   private def suffixWildCard(fnName: String)
-                                 (fn: FunCall,
+                                 (physicalColumnMapping: Map[UserColumnId, String],
+                                  fn: FunCall,
                                   setParams: Seq[String],
                                   ctx: Sqlizer.Context,
                                   escape: Escape): BQSql = {
 
-    val BQSql(l, setParamsL) = fn.parameters.head.sql(setParams, ctx, escape)
-    val BQSql(r, setParamsLR) = fn.parameters(1).sql(setParamsL, ctx + (SqlizerContext.Extras -> SqlizerContext.BeginsWith), escape)
+    val BQSql(l, setParamsL) = fn.parameters.head.sql(physicalColumnMapping, setParams, ctx, escape)
+    val BQSql(r, setParamsLR) = fn.parameters(1).sql(physicalColumnMapping, setParamsL, ctx + (SqlizerContext.Extras -> SqlizerContext.BeginsWith), escape)
     val s = s"$l $fnName $r"
     // cannot get around inserting % into already quoted strings
     BQSql(s, setParamsLR)

@@ -13,7 +13,7 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
   val underlying = lit
 
   @Override
-  def sql(setParams: Seq[String], ctx: Context, escape: Escape) = {
+  def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         val v = toUpper(quote(lit.value, escape, ctx), ctx)
@@ -41,7 +41,7 @@ class NumberLiteralSqlizer(lit: NumberLiteral[SoQLType]) extends Sqlizer[NumberL
 
   val underlying = lit
 
-  def sql(setParams: Seq[String], ctx: Context, escape: Escape) = {
+  def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
@@ -58,7 +58,7 @@ class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[Boole
 
   val underlying = lit
 
-  def sql(setParams: Seq[String], ctx: Context, escape: Escape) = {
+  def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
@@ -75,7 +75,7 @@ class NullLiteralSqlizer(lit: NullLiteral[SoQLType]) extends Sqlizer[NullLiteral
 
   val underlying = lit
 
-  def sql(setParams: Seq[String], ctx: Context, escape: Escape) =
+  def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) =
     BQSql("null", setParams)
 }
 
@@ -83,9 +83,9 @@ class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sq
 
   val underlying = expr
 
-  def sql(setParams: Seq[String], ctx: Context, escape: Escape) = {
+  def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
     val fn = SqlFunctions(expr.function.function)
-    val BQSql(sql, fnSetParams) = fn(expr, setParams, ctx, escape)
+    val BQSql(sql, fnSetParams) = fn(physicalColumnMapping, expr, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
 
@@ -102,8 +102,8 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
 
   val underlying = expr
 
-  def sql(setParams: Seq[String], ctx: Context, escape: Escape) = {
-      BQSql(expr.column.underlying, setParams)
+  def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
+    BQSql(physicalColumnMapping(expr.column), setParams)
 //    BQSql(toUpper(expr.column.underlying, ctx), setParams)
 //    reps.get(expr.column) match {
 //      case Some(rep) =>

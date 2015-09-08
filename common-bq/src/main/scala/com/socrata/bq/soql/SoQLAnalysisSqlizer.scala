@@ -21,19 +21,20 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   val convToUnderScore = "[)./+\\-?(*<> ]"
   var aliasMap = scala.collection.mutable.Map[String, String]() // Mapping from expressions that need to be aliased to their aliases
 
-  def sql(setParams: Seq[String], ctx: Context, escape: Escape) = {
-    sql(false, setParams, ctx, escape)
+  override def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
+    sql(physicalColumnMapping, false, setParams, ctx, escape)
   }
 
   /**
    * For rowcount w/o group by, just replace the select with count(*).
    * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t1
    */
-  def rowCountSql(setParams: Seq[String], ctx: Context, escape: Escape) = {
-    sql(true, setParams, ctx, escape)
+  def rowCountSql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
+    sql(physicalColumnMapping, true, setParams, ctx, escape)
   }
 
-  private def sql(reqRowCount: Boolean,
+  private def sql(physicalColumnMapping: Map[UserColumnId, String],
+                  reqRowCount: Boolean,
                   setParams: Seq[String],
                   context: Context,
                   escape: Escape) = {
@@ -45,10 +46,10 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
     val (selectPhrase, setParamsSelect) =
       if (reqRowCount && analysis.groupBy.isEmpty) (funcAlias(Seq("count(*)")), setParams)
-      else select(setParams, ctxSelect, escape)
+      else select(physicalColumnMapping, setParams, ctxSelect, escape)
 
     // WHERE
-    val where = ana.where.map(_.sql(setParamsSelect, ctx + (SoqlPart -> SoqlWhere), escape))
+    val where = ana.where.map(_.sql(physicalColumnMapping, setParamsSelect, ctx + (SoqlPart -> SoqlWhere), escape))
     val setParamsWhere = where.map(_.setParams).getOrElse(setParamsSelect)
 
     // SEARCH
@@ -70,21 +71,21 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     // GROUP BY
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsWhere)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
-      val BQSql(sql, newSetParams) = gb.sql(t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
+      val BQSql(sql, newSetParams) = gb.sql(physicalColumnMapping, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
         val modifiedSQL = aliasMap.getOrElse(sql, sql) // to reference possible aliases in the SELECT stmt
       (t2._1 :+ modifiedSQL, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsWhere)
 
     // HAVING
-    val having = ana.having.map(_.sql(setParamsGroupBy, ctx + (SoqlPart -> SoqlHaving), escape))
+    val having = ana.having.map(_.sql(physicalColumnMapping, setParamsGroupBy, ctx + (SoqlPart -> SoqlHaving), escape))
     val setParamsHaving = having.map(_.setParams).getOrElse(setParamsGroupBy)
 
     // ORDER BY
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val BQSql(sql, newSetParams) =
-          ob.sql(t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
+          ob.sql(physicalColumnMapping, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
         val modifiedSQL = sql.contains("desc") match {
           case true => s"${aliasMap.getOrElse(sql.substring(0, sql.indexOf("desc")).trim, sql)} desc"
           case false => aliasMap.getOrElse(sql, sql)
@@ -113,12 +114,13 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     else sql
   }
 
-  private def select(setParams: Seq[String],
+  private def select(physicalColumnMapping: Map[UserColumnId, String],
+                     setParams: Seq[String],
                      ctx: Context,
                      escape: Escape) = {
     val (conv, params) = analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
-      val BQSql(sql, newSetParams) = coreExpr.sql(t2._2, ctx + (RootExpr -> coreExpr), escape)
+      val BQSql(sql, newSetParams) = coreExpr.sql(physicalColumnMapping, t2._2, ctx + (RootExpr -> coreExpr), escape)
       val soqlType = coreExpr.typ
 
       // the query wants to extract the day, year, or month from the timestamp.
@@ -140,7 +142,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.zipWithIndex.map{
       case (sql, index) =>
-      if(sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp).*")) {
+      if (sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp).*")) {
         val alias = s"${sql.replaceAll(convToUnderScore, "_")}$index"
         val newSql = s"$sql AS $alias"
         aliasMap += (sql -> alias)

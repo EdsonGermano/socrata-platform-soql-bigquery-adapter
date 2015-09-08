@@ -27,7 +27,7 @@ case class BBQColumnInfo(userColumnId: UserColumnId, soqlTypeName: String) {
 
 class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
 
-  private val copyInfoTable = "bbq_copy_info"
+  private val copyInfoTable = "bbq_copy_info_2"
   private val columnMapTable = "bbq_column_map"
   private val bbqCopyInfoCreateTableStatement = s"""
     |CREATE TABLE IF NOT EXISTS $copyInfoTable (
@@ -217,17 +217,17 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
     None
   }
 
-  def getSystemToUserColumnMap(datasetId: Long): Option[Map[ColumnId, UserColumnId]] = {
+  def getUserToSystemColumnMap(datasetId: Long): Option[Map[UserColumnId, ColumnId]] = {
     for (conn <- managed(getConnection())) {
       val stmt = conn.createStatement()
       val query = s"""SELECT system_id, user_column_id FROM $columnMapTable WHERE dataset_id='$datasetId';"""
       val resultSet = stmt.executeQuery(query)
-      val systemToUserColumnMap = scala.collection.mutable.Map[ColumnId, UserColumnId]()
+      val systemToUserColumnMap = scala.collection.mutable.Map[UserColumnId, ColumnId]()
 
       while (resultSet.next()) {
         val columnId = resultSet.getInt("system_id")
         val userColumnId = resultSet.getString("user_column_id")
-        systemToUserColumnMap += new ColumnId(columnId) -> new UserColumnId(userColumnId)
+        systemToUserColumnMap += new UserColumnId(userColumnId) -> new ColumnId(columnId) 
       }
       if (systemToUserColumnMap.nonEmpty) {
         return Some(systemToUserColumnMap.toMap)

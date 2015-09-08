@@ -210,6 +210,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         dsSchema.values.map(ci => ci.userColumnId -> SoQLIndexableRep.sqlRep(ci)).toMap
 
       val selectParamSql = sqlizer.sql(
+        null,
         setParams = Seq(),
         ctx = sqlCtx,
         stringLit => SqlUtils.escapeString(pgu.conn, stringLit))

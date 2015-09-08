@@ -13,6 +13,7 @@ import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.bq.store.BigqueryUtils
 
 
 class SqlizerTest extends FunSuite with Matchers {
@@ -35,6 +36,7 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams should be (Seq("'ha001'", "'ha002'", "'ha003'"))
   }
 
+  // NOTE: Some tests commented out because the BQ Query Server does not test case insensitivity
 //  test("field in (x, y...) ci") {
 //    val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number limit 2"
 //    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
@@ -165,6 +167,12 @@ object SqlizerTest {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
     (analysis, "t1").sql(
+//      columnMap.map {
+//        case (cid, cinfo) =>
+//          val uid = new UserColumnId(cid.toString())
+//          (uid, BigqueryUtils.makeColumnName(new ColumnId(cinfo._1), uid))
+//      },
+      columnMap.map { case (cname, cinfo) => (new UserColumnId(cname.toString()), cname.toString()) },
       Seq.empty,
       sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity),
       passThrough)
