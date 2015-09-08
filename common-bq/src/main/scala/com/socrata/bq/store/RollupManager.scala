@@ -201,7 +201,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   {
     time("populate-rollup-table", "dataset_id" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name.underlying) {
       val soqlAnalysis = analysisToSoQLType(rollupAnalysis)
-      val sqlizer = new SoQLAnalysisSqlizer(soqlAnalysis, copyInfo.dataTableName, rollupReps)
+      val sqlizer = new SoQLAnalysisSqlizer(soqlAnalysis, copyInfo.dataTableName)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.CaseSensitivity -> true
       )
@@ -210,7 +210,6 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         dsSchema.values.map(ci => ci.userColumnId -> SoQLIndexableRep.sqlRep(ci)).toMap
 
       val selectParamSql = sqlizer.sql(
-        rep = dsRepMap,
         setParams = Seq(),
         ctx = sqlCtx,
         stringLit => SqlUtils.escapeString(pgu.conn, stringLit))

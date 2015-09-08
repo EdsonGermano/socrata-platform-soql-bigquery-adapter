@@ -14,8 +14,8 @@ class OrderBySqlizer(orderBy: OrderBy[UserColumnId, SoQLType]) extends Sqlizer[O
 
   val underlying = orderBy
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape: Escape) = {
-    val BQSql(s, setParamsOrderBy) = orderBy.expression.sql(rep, setParams, ctx, escape)
+  def sql(setParams: Seq[String], ctx: Context, escape: Escape) = {
+    val BQSql(s, setParamsOrderBy) = orderBy.expression.sql(setParams, ctx, escape)
     val se = s + (if (orderBy.ascending) "" else " desc")
     BQSql(se, setParamsOrderBy)
   }

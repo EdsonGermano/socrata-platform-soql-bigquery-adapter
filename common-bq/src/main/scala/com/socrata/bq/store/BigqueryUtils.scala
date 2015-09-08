@@ -21,6 +21,10 @@ import com.typesafe.scalalogging.slf4j.Logging
 
 import com.google.api.services.bigquery.model._
 
+case class BBQColumnInfo(userColumnId: UserColumnId, soqlTypeName: String) {
+  val typ = SoQLType.typesByName(new TypeName(soqlTypeName))
+}
+
 class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
 
   private val copyInfoTable = "bbq_copy_info"
@@ -227,6 +231,21 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBa
       }
       if (systemToUserColumnMap.nonEmpty) {
         return Some(systemToUserColumnMap.toMap)
+      }
+    }
+    None
+  }
+
+  def getCopyAndVersion(datasetId: Long): Option[(Long, Long)] = {
+    for (conn <- managed(getConnection())) {
+      val stmt = conn.createStatement()
+      val query = s"""SELECT copy_number, data_version FROM $copyInfoTable WHERE dataset_id='$datasetId';"""
+      val resultSet = stmt.executeQuery(query)
+
+      if (resultSet.next()) {
+        val copyNum = resultSet.getLong("copy_number")
+        val versionNum = resultSet.getLong("data_version")
+        return Some((copyNum, versionNum))
       }
     }
     None

@@ -25,7 +25,7 @@ import org.postgresql.ds.PGSimpleDataSource
 
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
 
-  private val copyTable = "bbq_copy_info"
+  private val copyTable = "bbq_copy_info_2"
 
   logger.info(s"config: ${config.toString}")
 

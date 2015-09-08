@@ -15,8 +15,7 @@ trait Sqlizer[T] {
   import Sqlizer._
   import SqlizerContext._
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[String], ctx: Context, escape:
-  Escape): BQSql
+  def sql(setParams: Seq[String], ctx: Context, escape: Escape): BQSql
 
   val underlying: T
 
@@ -88,8 +87,8 @@ object Sqlizer {
     new OrderBySqlizer(ob)
   }
 
-  implicit def analysisSqlizer(analysisTable: Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]]) = {
-    new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2, analysisTable._3)
+  implicit def analysisSqlizer(analysisTable: Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]) = {
+    new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2)
   }
 
 
