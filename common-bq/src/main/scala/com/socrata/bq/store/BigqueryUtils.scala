@@ -27,7 +27,7 @@ case class BBQColumnInfo(userColumnId: UserColumnId, soqlTypeName: String) {
 
 class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
 
-  private val copyInfoTable = "bbq_copy_info_2"
+  private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
   private val bbqCopyInfoCreateTableStatement = s"""
     |CREATE TABLE IF NOT EXISTS $copyInfoTable (
