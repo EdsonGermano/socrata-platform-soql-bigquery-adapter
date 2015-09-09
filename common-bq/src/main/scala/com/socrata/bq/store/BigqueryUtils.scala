@@ -233,6 +233,12 @@ protected trait BigqueryUtilsBase extends Logging {
     datasetInternalName.replace('.', '_') + "_" + copyNumber
   }
 
+  // The string identifier for a dataset/table combination used in query strings
+  def makeFullTableIdentifier(datasetId: String, datasetInternalName: String, copyNumber: Long): String = {
+    val tableName = makeTableName(datasetInternalName, copyNumber)
+    s"[$datasetId.$tableName]"
+  }
+
   def makeTableReference(bqProjectId: String, bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: CopyInfo) = {
     new TableReference()
         .setProjectId(bqProjectId)

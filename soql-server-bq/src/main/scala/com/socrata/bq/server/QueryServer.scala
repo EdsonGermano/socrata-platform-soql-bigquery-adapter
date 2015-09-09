@@ -253,7 +253,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
 
       // Determine whether copyNumber is 0 or not
       // Return empty (do not perform query) if copyNumber is 0
-      val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName, cinfo.copyNumber)}]" // TODO: Make bigquery utils function
+      val bqTableName = bqUtils.makeFullTableIdentifier(config.bigqueryDatasetId, datasetInternalName, cinfo.copyNumber)
       val results = managed(bqRowReader.query(
         analysis,
         (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
