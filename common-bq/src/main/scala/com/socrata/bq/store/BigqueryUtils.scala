@@ -65,7 +65,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
       val stmt = conn.prepareStatement(query)
       stmt.setLong(1, datasetId)
       val resultSet = stmt.executeQuery()
-      if (resultSet.first()) {
+      if (resultSet.next()) {
         // result set has a row
         val copyNumber = resultSet.getLong("copy_number")
         val dataVersion = resultSet.getLong("data_version")

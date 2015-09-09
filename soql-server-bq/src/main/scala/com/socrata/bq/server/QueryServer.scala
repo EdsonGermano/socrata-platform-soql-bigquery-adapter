@@ -102,19 +102,19 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     val servReq = req.servletRequest
     val ds = servReq.getParameter("ds")
     val copy = Option(servReq.getParameter("copy"))
-    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      getSchema(ds) match {
-        case Some(schemaResult) =>
-          val datasetId = bqUtils.parseDatasetId(ds)
-          val (copyNum: Long, versionNum: Long) = bqUtils.getCopyAndVersion(datasetId).getOrElse(0L, 0L)
-          logger.info(s"Found dataset $ds")
-          OK ~>
-            copyInfoHeader(copyNum, versionNum, new DateTime()) ~> // TODO: this header
-            Write(JsonContentType)(JsonUtil.writeJson(_, schemaResult, buffer = true))
-        case None =>
-          logger.info(s"Cannot find dataset $ds")
-          NotFound
-      }
+    getSchema(ds) match {
+      case Some(schemaResult) =>
+        val (copyNum: Long, versionNum: Long, lastModified: DateTime) = bqUtils.getMetadataEntry(ds) match {
+          case Some(cinfo) => (cinfo.copyNumber, cinfo.dataVersion, cinfo.lastModified)
+          case None => (0L, 0L)
+        }
+        logger.debug(s"Found schema for dataset $ds")
+        OK ~>
+          copyInfoHeader(copyNum, versionNum, lastModified) ~>
+          Write(JsonContentType)(JsonUtil.writeJson(_, schemaResult, buffer = true))
+      case None =>
+        logger.debug(s"Cannot find schema for dataset $ds")
+        NotFound
     }
   }
 
@@ -182,28 +182,28 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     logger.debug(s"streamQueryResults called on dataset $datasetName")
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
-      bqUtils.getCopyNumber(datasetId.underlying) match {
-        case Some(copyNum) =>
+      bqUtils.getMetadataEntry(datasetName) match {
+        case Some(cinfo) =>
           def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
-          execQuery(pgu, datasetName, datasetId, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+          execQuery(pgu, datasetName, datasetId, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
             case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
               // Very weird separation of concerns between execQuery and streaming. Most likely we will
               // want yet-another-refactoring where much of execQuery is lifted out into this function.
               // This will significantly change the tests; however.
-            logger.info("Success, writing results with CJSONWriter")
-            ETag(etag)(resp)
-            copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
-            for (r <- results) yield {
-              CJSONWriter.writeCJson(bqUtils.getObfuscationKey(datasetId.underlying), qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
-            }
+              logger.info("Success, writing results with CJSONWriter")
+              ETag(etag)(resp)
+              copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
+              for (r <- results) yield {
+                CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
+              }
             case NotModified(etags) =>
               notModified(etags)(resp)
             case PreconditionFailed =>
               responses.PreconditionFailed(resp)
           }
         case None =>
-          logger.info(s"No copy number found for dataset $datasetId")
+          logger.info(s"No metadata entry for dataset $datasetId")
           NotFound(resp)
       }
     }
@@ -213,6 +213,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
     datasetId: DatasetId,
+    cinfo: BBQDatasetInfo,
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     rowCount: Boolean,
     reqCopy: Option[String],
@@ -221,11 +222,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
   ): QueryResult = {
     import Sqlizer._
 
-    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyNum: Long, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
+    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
       // TODO: Why are we accessing truth? Why do we need the obfuscation key? Do we need to keep the PGU Universe?
 
       logger.info(s"runQuery called on $datasetInternalName ($datasetId")
-      val cryptProvider = new CryptProvider(bqUtils.getObfuscationKey(datasetId.underlying).get)
+      val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
@@ -250,53 +251,43 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         logger.debug(s"$k: ${v.repType}")
       }
 
-      // Use the Utils to request the appropriate table name for the given internal dataset name
-      val copyNumberOption = bqUtils.getCopyNumber(datasetId.underlying)
-
       // Determine whether copyNumber is 0 or not
       // Return empty (do not perform query) if copyNumber is 0
-      copyNumberOption match {
-        case Some(copyNumber) => {
-          val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName, copyNumber)}]" // TODO: Make bigquery utils function
-          val results = managed(bqRowReader.query(
-            analysis,
-            (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-              new SoQLAnalysisSqlizer(a, tableName).sql(userToSystemColumnMap.map { case (uid, cid) => uid -> bqUtils.makeColumnName(cid, uid) }, Seq.empty, sqlCtx, escape),
-            rowCount,
-            bqReps,
-            new BigQueryQuerier(config.bigqueryProjectId),
-            bqTableName))
-          (qrySchema, results)
-        }
-        case None => (qrySchema, managed(EmptyIt))
-      }
+      val bqTableName = s"[${config.bigqueryDatasetId}.${bqUtils.makeTableName(datasetInternalName, cinfo.copyNumber)}]" // TODO: Make bigquery utils function
+      val results = managed(bqRowReader.query(
+        analysis,
+        (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+          new SoQLAnalysisSqlizer(a, tableName).sql(userToSystemColumnMap.map { case (uid, cid) => uid -> bqUtils.makeColumnName(cid, uid) }, Seq.empty, sqlCtx, escape),
+        rowCount,
+        bqReps,
+        new BigQueryQuerier(config.bigqueryProjectId),
+        bqTableName))
+      (qrySchema, results)
+
     }
 
     logger.info(s"execQuery called on $datasetInternalName ($datasetId")
 
-    bqUtils.getCopyAndVersion(datasetId.underlying) match {
-      case Some((copyNum, versionNum)) =>
-        //    val copy = getCopy(pgu, datasetInfo, reqCopy)
-        val etag = etagFromCopy(datasetInternalName, copyNum, versionNum)
-        val lastModified = new DateTime() // TODO: actual value
+    val copyNumber = cinfo.copyNumber
+    val versionNumber = cinfo.dataVersion
+    val etag = etagFromCopy(datasetInternalName, copyNumber, versionNumber)
+    val lastModified = cinfo.lastModified
 
-        // Conditional GET handling
-        precondition.check(Some(etag), sideEffectFree = true) match {
-          case Passed =>
-            ifModifiedSince match {
-              case Some(ims) if !lastModified.minusMillis(lastModified.getMillisOfSecond).isAfter(ims)
-                && precondition == NoPrecondition =>
-                NotModified(Seq(etag))
-              case Some(_) | None =>
-                val (qrySchema, results) = runQuery(pgu, copyNum, analysis, rowCount)
-                Success(qrySchema, copyNum, versionNum, results, etag, lastModified)
-            }
-          case FailedBecauseMatch(etags) =>
-            NotModified(etags)
-          case FailedBecauseNoMatch =>
-            PreconditionFailed
+    // Conditional GET handling
+    precondition.check(Some(etag), sideEffectFree = true) match {
+      case Passed =>
+        ifModifiedSince match {
+          case Some(ims) if !lastModified.minusMillis(lastModified.getMillisOfSecond).isAfter(ims)
+            && precondition == NoPrecondition =>
+            NotModified(Seq(etag))
+          case Some(_) | None =>
+            val (qrySchema, results) = runQuery(pgu, analysis, rowCount)
+            Success(qrySchema, copyNumber, versionNumber, results, etag, lastModified)
         }
-      case None => ???
+      case FailedBecauseMatch(etags) =>
+        NotModified(etags)
+      case FailedBecauseNoMatch =>
+        PreconditionFailed
     }
   }
 
