@@ -22,7 +22,6 @@ import com.typesafe.config.Config
 import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.ds.PGSimpleDataSource
 
-
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
 
   private val copyTable = "bbq_copy_info_2"
@@ -78,9 +77,8 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def currentCopyNumber(datasetInternalName: String, cookie: Cookie): Long = {
     logger.info(s"currentCopyNumber called for $datasetInternalName")
-    val datasetId = bigqueryUtils.parseDatasetId(datasetInternalName)
-    bigqueryUtils.getCopyNumber(datasetId) match {
-      case Some(copyNum) => copyNum
+    bigqueryUtils.getMetadataEntry(datasetInternalName) match {
+      case Some(bbqDatasetInfo) => bbqDatasetInfo.copyNumber
       case None =>
         logger.warn(s"Could not find current copy number for $datasetInternalName")
         0
@@ -94,9 +92,8 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   override def currentVersion(datasetInternalName: String, cookie: Cookie): Long = {
     logger.info(s"currentVersion called for $datasetInternalName")
-    val datasetId = bigqueryUtils.parseDatasetId(datasetInternalName)
-    bigqueryUtils.getDataVersion(datasetId) match {
-      case Some(version) => version
+    bigqueryUtils.getMetadataEntry(datasetInternalName) match {
+      case Some(bbqDatasetInfo) => bbqDatasetInfo.dataVersion
       case None =>
         logger.warn(s"Could not find a version for $datasetInternalName")
         0
@@ -109,11 +106,10 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
                       cookie: Secondary.Cookie,
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {
-    val datasetId = bigqueryUtils.parseDatasetId(datasetInfo.internalName)
-    logger.info(s"resync called for dataset ${datasetInfo.internalName} DatasetId($datasetId)")
+    logger.info(s"resync called for dataset ${datasetInfo.internalName}")
     resyncHandler.handle(datasetInfo, copyInfo, schema, rows)
     bigqueryUtils.setMetadataEntry(datasetInfo, copyInfo)
-    bigqueryUtils.setSchema(datasetId, schema)
+    bigqueryUtils.setSchema(datasetInfo, schema)
     cookie
   }
 
