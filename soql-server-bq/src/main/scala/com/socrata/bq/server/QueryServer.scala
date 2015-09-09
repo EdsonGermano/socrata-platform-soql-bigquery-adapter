@@ -106,8 +106,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       getSchema(ds) match {
         case Some(schemaResult) =>
           val datasetId = bqUtils.parseDatasetId(ds)
-          val copyNum: Long = bqUtils.getCopyNumber(datasetId).getOrElse(0)
-          val versionNum: Long = bqUtils.getDataVersion(datasetId).getOrElse(0)
+          val (copyNum: Long, versionNum: Long) = bqUtils.getCopyAndVersion(datasetId).getOrElse(0L, 0L)
           logger.info(s"Found dataset $ds")
           OK ~>
             copyInfoHeader(copyNum, versionNum, new DateTime()) ~> // TODO: this header
@@ -276,7 +275,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     logger.info(s"execQuery called on $datasetInternalName ($datasetId")
 
     bqUtils.getCopyAndVersion(datasetId.underlying) match {
-      case Some((copyNum, versionNum)) => {
+      case Some((copyNum, versionNum)) =>
         //    val copy = getCopy(pgu, datasetInfo, reqCopy)
         val etag = etagFromCopy(datasetInternalName, copyNum, versionNum)
         val lastModified = new DateTime() // TODO: actual value
@@ -297,7 +296,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
           case FailedBecauseNoMatch =>
             PreconditionFailed
         }
-      }
       case None => ???
     }
   }
