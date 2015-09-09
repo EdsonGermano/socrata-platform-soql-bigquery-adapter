@@ -151,6 +151,10 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   def setSchema(datasetInternalName: String, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit =
     setSchema(parseDatasetId(datasetInternalName), schema)
 
+  def getSchema(datasetInternalName: String): Option[Schema] = {
+    getSchema(parseDatasetId(datasetInternalName))
+  }
+
   def getSchema(datasetId: Long): Option[Schema] = {
     for (conn <- managed(getConnection())) {
       val stmt = conn.createStatement()

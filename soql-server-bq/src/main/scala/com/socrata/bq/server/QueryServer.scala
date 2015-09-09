@@ -159,7 +159,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     val copy = Option(servReq.getParameter("copy"))
 //    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
 
-    logger.info("Performing query on dataset " + datasetId)
+    logger.debug("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
@@ -223,9 +223,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     import Sqlizer._
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
-      // TODO: Why are we accessing truth? Why do we need the obfuscation key? Do we need to keep the PGU Universe?
-
-      logger.info(s"runQuery called on $datasetInternalName ($datasetId")
+      logger.debug(s"runQuery called on $datasetInternalName ($datasetId")
       val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
@@ -234,15 +232,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit) // TODO: relies on pgu
 
-//        val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema // TODO: relies on pgu
       val userToSystemColumnMap = bqUtils.getUserToSystemColumnMap(datasetId.underlying).getOrElse {
         sys.error("Could not obtain systemToUserColumnMap")
       }
       val bqReps = generateReps(analysis)
-//        val querier = this.readerWithQuery(pgu.conn, pgu, latestCopy, baseSchema) // TODO: relies on pgu
-//        val qrySchema = querySchema(analysis, latestCopy) // TODO: relies on pgu
       val qrySchema = querySchema(analysis)
-//        val sqlReps = querier.getSqlReps(systemToUserColumnMap) // TODO: relies on pgu
       val bqRowReader = new BQRowReader[SoQLType, SoQLValue]
 
       // Print the schema for this query
@@ -251,8 +245,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         logger.debug(s"$k: ${v.repType}")
       }
 
-      // Determine whether copyNumber is 0 or not
-      // Return empty (do not perform query) if copyNumber is 0
       val bqTableName = bqUtils.makeFullTableIdentifier(config.bigqueryDatasetId, datasetInternalName, cinfo.copyNumber)
       val results = managed(bqRowReader.query(
         analysis,
@@ -266,7 +258,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
 
     }
 
-    logger.info(s"execQuery called on $datasetInternalName ($datasetId")
+    logger.debug(s"execQuery called on $datasetInternalName ($datasetId")
 
     val copyNumber = cinfo.copyNumber
     val versionNumber = cinfo.dataVersion
@@ -297,7 +289,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
                                                    schema: ColumnIdMap[ColumnInfo[SoQLType]]):
     PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
 
-    logger.info("readerWithQuery called")
+    logger.debug("readerWithQuery called")
 
     val tableName = copyInfo.dataTableName
 
@@ -396,10 +388,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
 
   // Returns the schema the /schema API endpoint
   private def getSchema(datasetName : String): Option[Schema] = {
-//    pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
-    val datasetId = bqUtils.parseDatasetId(datasetName)
-    logger.debug(s"getSchema called on $datasetId")
-    bqUtils.getSchema(datasetId)
+    bqUtils.getSchema(datasetName)
   }
 
   // TODO: this is no longer used
