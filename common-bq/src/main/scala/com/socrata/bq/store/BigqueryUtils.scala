@@ -61,13 +61,12 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   private def getMetadataEntry(datasetId: Long): Option[BBQDatasetInfo] = {
     for (conn <- managed(getConnection())) {
       conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
-      val query = s"SELECT copy_number, data_version, locale, obfuscation_key FROM $copyInfoTable WHERE dataset_id=?;"
+      val query = s"SELECT copy_number, data_version, locale, last_modified, obfuscation_key FROM $copyInfoTable WHERE dataset_id=?;"
       val stmt = conn.prepareStatement(query)
       stmt.setLong(1, datasetId)
       val resultSet = stmt.executeQuery()
       if (resultSet.first()) {
         // result set has a row
-        val datasetId = resultSet.getLong("dataset_id")
         val copyNumber = resultSet.getLong("copy_number")
         val dataVersion = resultSet.getLong("data_version")
         val lastModified = new DateTime(resultSet.getTimestamp("last_modified").getTime)
