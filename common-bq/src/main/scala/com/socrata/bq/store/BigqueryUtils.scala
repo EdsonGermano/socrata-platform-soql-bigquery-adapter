@@ -30,7 +30,7 @@ class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadat
 }
 
 protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BigqueryUtilsBase {
-  private val copyInfoTable = "bbq_copy_info_2"
+  private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
   private val bbqCopyInfoCreateTableStatement = s"""
     |CREATE TABLE IF NOT EXISTS $copyInfoTable (
