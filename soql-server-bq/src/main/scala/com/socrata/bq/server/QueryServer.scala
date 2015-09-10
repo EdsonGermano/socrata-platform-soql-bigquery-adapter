@@ -180,37 +180,34 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     logger.info(s"analysis: ${analysis.toString()}")
 
     logger.debug(s"streamQueryResults called on dataset $datasetName")
-    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
-      bqUtils.getMetadataEntry(datasetName) match {
-        case Some(cinfo) =>
-          def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
+    val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
+    bqUtils.getMetadataEntry(datasetName) match {
+      case Some(cinfo) =>
+        def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
-          execQuery(pgu, datasetName, datasetId, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
-            case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
-              // Very weird separation of concerns between execQuery and streaming. Most likely we will
-              // want yet-another-refactoring where much of execQuery is lifted out into this function.
-              // This will significantly change the tests; however.
-              logger.info("Success, writing results with CJSONWriter")
-              ETag(etag)(resp)
-              copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
-              for (r <- results) yield {
-                CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
-              }
-            case NotModified(etags) =>
-              notModified(etags)(resp)
-            case PreconditionFailed =>
-              responses.PreconditionFailed(resp)
-          }
-        case None =>
-          logger.info(s"No metadata entry for dataset $datasetId")
-          NotFound(resp)
-      }
+        execQuery(datasetName, datasetId, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+          case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
+            // Very weird separation of concerns between execQuery and streaming. Most likely we will
+            // want yet-another-refactoring where much of execQuery is lifted out into this function.
+            // This will significantly change the tests; however.
+            logger.info("Success, writing results with CJSONWriter")
+            ETag(etag)(resp)
+            copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
+            for (r <- results) yield {
+              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
+            }
+          case NotModified(etags) =>
+            notModified(etags)(resp)
+          case PreconditionFailed =>
+            responses.PreconditionFailed(resp)
+        }
+      case None =>
+        logger.info(s"No metadata entry for dataset $datasetId")
+        NotFound(resp)
     }
   }
 
   def execQuery(
-    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
     datasetId: DatasetId,
     cinfo: BBQDatasetInfo,
@@ -220,9 +217,8 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
-    import Sqlizer._
 
-    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
+    def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
       logger.debug(s"runQuery called on $datasetInternalName ($datasetId")
       val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
@@ -230,7 +226,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
         SqlizerContext.CaseSensitivity -> caseSensitivity
       )
-      val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit) // TODO: relies on pgu
+      val escape = (stringLit: String) => SqlUtils.escapeString(stringLit)
 
       val userToSystemColumnMap = bqUtils.getUserToSystemColumnMap(datasetId.underlying).getOrElse {
         sys.error("Could not obtain systemToUserColumnMap")
@@ -273,7 +269,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            val (qrySchema, results) = runQuery(pgu, analysis, rowCount)
+            val (qrySchema, results) = runQuery(analysis, rowCount)
             Success(qrySchema, copyNumber, versionNumber, results, etag, lastModified)
         }
       case FailedBecauseMatch(etags) =>
@@ -283,6 +279,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
+  // TODO: not used
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                                    copyInfo: CopyInfo,
@@ -348,23 +345,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
             coreExpr.typ == SoQLVersion
           )(SoQLTypeContext.typeNamespace, null)
           map + (cid -> cinfo)
-      }
-    }
-  }
-
-  /**
-   * Get lastest schema
-   * @param ds Data coordinator dataset id
-   * @return Some schema or none
-   */
-  def getSchema(ds: String, reqCopy: Option[String]): Option[Schema] = {
-    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      for {
-        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
-        datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
-      } yield {
-        val copy = getCopy(pgu, datasetInfo, reqCopy)
-        pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
       }
     }
   }
