@@ -16,7 +16,6 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
   val database = new DataSourceConfig(config, path("database"))
 
   val tablespace = optionally(getString("tablespace"))
-
   val resyncBatchSize = optionally(getInt("resyncBatchSize")).getOrElse(1000)
 
 }

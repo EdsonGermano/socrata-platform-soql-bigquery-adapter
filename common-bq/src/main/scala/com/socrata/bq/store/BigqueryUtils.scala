@@ -1,107 +1,250 @@
 package com.socrata.bq.store
 
-import java.sql.ResultSet
+import com.rojoma.simplearm.util._
+import com.socrata.soql.types._
+import com.socrata.datacoordinator.util.collection.{UserColumnIdMap, ColumnIdMap}
+import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
+import com.socrata.datacoordinator.secondary._
+import com.socrata.datacoordinator.id._
+import com.socrata.bq.soql.BigQueryRepFactory
+import com.socrata.datacoordinator.common.soql.SoQLTypeContext
+import com.socrata.datacoordinator.truth.metadata.{Schema}
+import com.socrata.datacoordinator.util.NullCache
+import com.socrata.soql.environment.TypeName
 
 import collection.JavaConversions._
-
-import com.socrata.bq.soql.BigQueryRepFactory
-
-import com.rojoma.json.v3.ast._
-import com.rojoma.json.v3.util.JsonUtil
-import com.rojoma.simplearm.util._
-import com.rojoma.simplearm.Managed
-import com.socrata.soql.types._
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.datacoordinator.common.DataSourceConfig
-import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
-import com.socrata.datacoordinator.id.{CopyId, ColumnId, UserColumnId}
+import java.sql.{ResultSet, Timestamp}
 import com.typesafe.scalalogging.slf4j.Logging
-import org.postgresql.ds.PGSimpleDataSource
-
-import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
-import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.client.http.ByteArrayContent
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.jackson2.JacksonFactory
-import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
 import com.google.api.services.bigquery.model._
+import org.joda.time.DateTime
 
-class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryUtilsBase {
+case class BBQColumnInfo(userColumnId: UserColumnId, soqlTypeName: String) {
+  val typ = SoQLType.typesByName(new TypeName(soqlTypeName))
+}
 
-  private val copyInfoTable = "bbq_copy_info"
-  private val createTableStatement =
-    s"CREATE TABLE IF NOT EXISTS $copyInfoTable ( dataset_id integer PRIMARY KEY, copy_number integer, data_version integer );"
+case class BBQDatasetInfo(datasetId: Long, copyNumber: Long, dataVersion: Long, lastModified: DateTime, locale: String, obfuscationKey: Array[Byte])
 
-  def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = 
+class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadataHandler(dsInfo) with BigqueryUtilsBase {
+  def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: CopyInfo) =
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
+}
 
-    
-  def getCopyNumber(datasetId: Long): Option[Long] = {
-    for (conn <- managed(getConnection())) {
-      conn.createStatement().execute(createTableStatement)
-      val query = s"SELECT copy_number FROM $copyInfoTable WHERE dataset_id=$datasetId;"
-      val stmt = conn.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)
-      val resultSet = stmt.executeQuery(query)
-      if (resultSet.first()) {
+protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BigqueryUtilsBase {
+  private val copyInfoTable = "bbq_copy_info"
+  private val columnMapTable = "bbq_column_map"
+  private val bbqCopyInfoCreateTableStatement = s"""
+    |CREATE TABLE IF NOT EXISTS $copyInfoTable (
+    |  dataset_id bigint PRIMARY KEY,
+    |  copy_number bigint,
+    |  data_version bigint,
+    |  last_modified timestamp with time zone,
+    |  locale character varying(40),
+    |  obfuscation_key bytea
+    |);
+    """.stripMargin.trim
+
+  private val bbqColumnMapCreateTableStatement = s"""
+    |CREATE TABLE IF NOT EXISTS $columnMapTable (
+    |  system_id bigint,
+    |  dataset_id bigint,
+    |  user_column_id character varying(40),
+    |  type_name character varying(40),
+    |  is_system_primary_key boolean,
+    |  is_user_primary_key boolean,
+    |  is_version boolean,
+    |  PRIMARY KEY(dataset_id, system_id)
+    |);
+    """.stripMargin.trim
+
+  private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
+
+  private def getMetadataEntry(datasetId: Long): Option[BBQDatasetInfo] = {
+    for (conn <- managed(getConnection)) {
+      conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
+      val query = s"SELECT copy_number, data_version, locale, last_modified, obfuscation_key FROM $copyInfoTable WHERE dataset_id=?;"
+      val stmt = conn.prepareStatement(query)
+      stmt.setLong(1, datasetId)
+      val resultSet = stmt.executeQuery()
+      if (resultSet.next()) {
         // result set has a row
-        val copyNumber = resultSet.getInt("copy_number")
-        return Some(copyNumber)
+        val copyNumber = resultSet.getLong("copy_number")
+        val dataVersion = resultSet.getLong("data_version")
+        val lastModified = new DateTime(resultSet.getTimestamp("last_modified").getTime)
+        val locale = resultSet.getString("locale")
+        val obfuscationKey = resultSet.getBytes("obfuscation_key")
+        return Some(new BBQDatasetInfo(datasetId, copyNumber, dataVersion, lastModified, locale, obfuscationKey))
       }
     }
     None
   }
 
-  def getDataVersion(datasetId: Long): Option[Long] = {
-    for (conn <- managed(getConnection())) {
-      conn.createStatement().execute(createTableStatement)
-      val query = s"SELECT data_version FROM $copyInfoTable WHERE dataset_id=$datasetId;"
-      val stmt = conn.createStatement()
-      val resultSet = stmt.executeQuery(query)
-      if (resultSet.first()) {
-        // result set has a row
-        val dataVersion = resultSet.getInt("data_version")
-        return Some(dataVersion)
-      }
-    }
-    None
-  }
+  def getMetadataEntry(datasetInfo: DatasetInfo): Option[BBQDatasetInfo] =
+    getMetadataEntry(parseDatasetId(datasetInfo.internalName))
 
-  def setCopyInfoEntry(datasetId: Long, copyInfo: SecondaryCopyInfo) = {
-    for (conn <- managed(getConnection())) {
-      val stmt = conn.createStatement()
-      val (id, copyNumber, version) = (datasetId, copyInfo.copyNumber, copyInfo.dataVersion)
+  def getMetadataEntry(datasetId: DatasetId): Option[BBQDatasetInfo] =
+    getMetadataEntry(datasetId.underlying)
+
+  def getMetadataEntry(datasetInternalName: String): Option[BBQDatasetInfo] =
+    getMetadataEntry(parseDatasetId(datasetInternalName))
+
+  def setMetadataEntry(datasetInfo: DatasetInfo, copyInfo: CopyInfo) = {
+    val id = parseDatasetId(datasetInfo.internalName)
+    val (copyNumber, version, lastModified) = (copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified)
+    val (locale, obfuscationKey) = (datasetInfo.localeName, datasetInfo.obfuscationKey)
+    for (conn <- managed(getConnection)) {
       val query = s"""
-              |BEGIN;
-              |$createTableStatement
-              |LOCK TABLE ${copyInfoTable} IN SHARE MODE;
-              |UPDATE ${copyInfoTable}
-              |  SET (copy_number, data_version) = ('$copyNumber', '$version') WHERE dataset_id='$id';
-              |INSERT INTO ${copyInfoTable} (dataset_id, copy_number, data_version)
-              |  SELECT $id, $copyNumber, $version
-              |  WHERE NOT EXISTS ( SELECT 1 FROM bbq_copy_info WHERE dataset_id='$id' );
-              |COMMIT;""".stripMargin.trim
-      stmt.executeUpdate(query)
+          |BEGIN;
+          |$bbqCopyInfoCreateTableStatement
+          |LOCK TABLE $copyInfoTable IN SHARE MODE;
+          |UPDATE $copyInfoTable
+          |  SET (copy_number, data_version, last_modified, locale, obfuscation_key) = ('$copyNumber', '$version', ?, '$locale', ?)
+          |  WHERE dataset_id='$id';
+          |INSERT INTO $copyInfoTable (dataset_id, copy_number, data_version, last_modified, locale, obfuscation_key)
+          |  SELECT '$id', '$copyNumber', '$version', ?, '$locale', ?
+          |  WHERE NOT EXISTS ( SELECT 1 FROM $copyInfoTable WHERE dataset_id='$id' );
+          |COMMIT;""".stripMargin.trim
+      val stmt = conn.prepareStatement(query)
+      val ts = new Timestamp(lastModified.getMillis)
+      stmt.setTimestamp(1, ts)
+      stmt.setTimestamp(3, ts)
+      stmt.setBytes(2, obfuscationKey)
+      stmt.setBytes(4, obfuscationKey)
+      stmt.executeUpdate()
     }
   }
-  
-  private def getConnection() = dsInfo.dataSource.getConnection()
+
+  def setSchema(datasetId: Long, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {
+    for (conn <- managed(getConnection)) {
+      val stmt = conn.createStatement()
+
+      // Delete the currently stored schema for this dataset
+      val delete =
+        s"""
+           |BEGIN;
+           |$bbqColumnMapCreateTableStatement
+           |LOCK TABLE $columnMapTable IN SHARE MODE;
+           |DELETE FROM $columnMapTable WHERE dataset_id='$datasetId';
+         """.stripMargin.trim
+      stmt.execute(delete)
+
+      // Add the new schema
+      val update = conn.prepareStatement(s"INSERT INTO $columnMapTable VALUES (?, ?, ?, ?, ?, ?, ?)")
+      schema.foreach { (columnId, columnInfo) =>
+        update.setLong(1, columnId.underlying)
+        update.setLong(2, datasetId)
+        update.setString(3, columnInfo.id.underlying)
+        update.setString(4, columnInfo.typ.name.toString())
+        update.setBoolean(5, columnInfo.isSystemPrimaryKey)
+        update.setBoolean(6, columnInfo.isUserPrimaryKey)
+        update.setBoolean(7, columnInfo.isVersion)
+
+        update.execute()
+      }
+
+      conn.createStatement().execute("COMMIT;")
+    }
+  }
+
+  def setSchema(datasetInfo: DatasetInfo, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit =
+    setSchema(parseDatasetId(datasetInfo.internalName), schema)
+
+  def setSchema(datasetInternalName: String, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit =
+    setSchema(parseDatasetId(datasetInternalName), schema)
+
+  def getSchema(datasetInternalName: String): Option[Schema] = {
+    getSchema(parseDatasetId(datasetInternalName))
+  }
+
+  def getSchema(datasetId: Long): Option[Schema] = {
+    for (conn <- managed(getConnection)) {
+      val stmt = conn.createStatement()
+      val query =
+        s"""
+           |SELECT system_id, user_column_id, type_name, is_system_primary_key, is_user_primary_key, is_version
+           |FROM $columnMapTable
+           |WHERE dataset_id='$datasetId';
+         """.stripMargin.trim
+      val resultSet = stmt.executeQuery(query)
+      var userColumnIdMap = UserColumnIdMap.empty[TypeName]
+      var columnIds = Seq.empty[(UserColumnId, SoQLType)]
+      var systemPrimaryKey: UserColumnId = new UserColumnId(":id") // in case we aren't storing the system pk
+      var userPrimaryKey: Option[UserColumnId] = None
+
+      while (resultSet.next()) {
+        val userColumnId = resultSet.getString("user_column_id")
+        val typeName = new TypeName(resultSet.getString("type_name"))
+        val soqlType = SoQLType.typesByName.getOrElse(typeName, SoQLNull)
+        val isSystemPrimaryKey = resultSet.getBoolean("is_system_primary_key")
+        val isUserPrimaryKey = resultSet.getBoolean("is_user_primary_key")
+
+        // Build up the user column id map and the column id map
+        userColumnIdMap += (new UserColumnId(userColumnId), typeName)
+        columnIds :+= (new UserColumnId(userColumnId), soqlType)
+
+        if (isSystemPrimaryKey)
+          systemPrimaryKey = new UserColumnId(userColumnId)
+
+        if (isUserPrimaryKey)
+          userPrimaryKey = Some(new UserColumnId(userColumnId))
+      }
+
+      // Ensure that we built up a user column id map before attempting to construct the schema
+      if (!userColumnIdMap.isEmpty) {
+        val (version, locale) = getMetadataEntry(datasetId) match {
+          case Some(info) => (info.dataVersion, info.locale)
+          case None       => (0L, "en_US")
+        }
+        val pk = userPrimaryKey.getOrElse(systemPrimaryKey)
+        val hash = schemaHasher.schemaHash(datasetId, version, columnIds, pk, locale)
+        val schema = new Schema(hash, userColumnIdMap, systemPrimaryKey, locale)
+        return Some(schema)
+      }
+    }
+    None
+  }
+
+  def getUserToSystemColumnMap(datasetId: Long): Option[Map[UserColumnId, ColumnId]] = {
+    for (conn <- managed(getConnection)) {
+      val stmt = conn.createStatement()
+      val query = s"""SELECT system_id, user_column_id FROM $columnMapTable WHERE dataset_id='$datasetId';"""
+      val resultSet = stmt.executeQuery(query)
+      val systemToUserColumnMap = scala.collection.mutable.Map[UserColumnId, ColumnId]()
+
+      while (resultSet.next()) {
+        val columnId = resultSet.getInt("system_id")
+        val userColumnId = resultSet.getString("user_column_id")
+        systemToUserColumnMap += new UserColumnId(userColumnId) -> new ColumnId(columnId) 
+      }
+      if (systemToUserColumnMap.nonEmpty) {
+        return Some(systemToUserColumnMap.toMap)
+      }
+    }
+    None
+  }
+
+  private def getConnection = dsInfo.dataSource.getConnection
 }
 
 object BigqueryUtils extends BigqueryUtilsBase
 
-class BigqueryUtilsBase extends Logging {
+protected trait BigqueryUtilsBase extends Logging {
 
-  private def parseDatasetId(datasetInternalName: String): Int = {
-    datasetInternalName.split('.')(1).toInt
+  def parseDatasetId(datasetInternalName: String): Long = {
+    datasetInternalName.split('.')(1).toLong
   }
 
   def makeTableName(datasetInternalName: String, copyNumber: Long): String = {
     datasetInternalName.replace('.', '_') + "_" + copyNumber
   }
 
-  def makeTableReference(bqProjectId: String, bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo) = {
+  // The string identifier for a dataset/table combination used in query strings
+  // e.g. SELECT * FROM [datasetId.tableName] ...
+  def makeFullTableIdentifier(datasetId: String, datasetInternalName: String, copyNumber: Long): String = {
+    val tableName = makeTableName(datasetInternalName, copyNumber)
+    s"[$datasetId.$tableName]"
+  }
+
+  def makeTableReference(bqProjectId: String, bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: CopyInfo) = {
     new TableReference()
         .setProjectId(bqProjectId)
         .setDatasetId(bqDatasetId)
@@ -120,18 +263,18 @@ class BigqueryUtilsBase extends Logging {
     }
   }
 
-  def makeColumnNameMap(soqlSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]]): ColumnIdMap[String] = {
+  def makeColumnNameMap(soqlSchema: ColumnIdMap[ColumnInfo[SoQLType]]): ColumnIdMap[String] = {
     soqlSchema.transform( (id, info) => makeColumnName(id, info.id) )
   }
 
-  def makeTableSchema(schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+  def makeTableSchema(schema: ColumnIdMap[ColumnInfo[SoQLType]],
                       columnNameMap: ColumnIdMap[String]): TableSchema = {
     // map over the values of schema, converting to bigquery TableFieldSchema
-    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) => {
+    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) =>
       BigQueryRepFactory(info.typ)
           .bigqueryFieldSchema
           .setName(columnNameMap(id))
-    }}
+    }
     new TableSchema().setFields(fields)
   }
 
@@ -142,5 +285,4 @@ class BigqueryUtilsBase extends Logging {
     if (truncate) config.setWriteDisposition("TRUNCATE")
     new Job().setConfiguration(new JobConfiguration().setLoad(config))
   }
-
 }

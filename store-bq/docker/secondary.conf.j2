@@ -38,7 +38,7 @@ bq-secondary-config {
 
   # TODOMS figure out right strategy for where this should go 
   log4j {
-    rootLogger = [ INFO, console ]
+    rootLogger = [ {{ LOG_LEVEL }}, console ]
     appender {
       console.class = org.apache.log4j.ConsoleAppender
       console.props {

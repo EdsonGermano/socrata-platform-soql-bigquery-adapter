@@ -31,15 +31,18 @@ com.socrata.soql-server-bq {
       username = "{{ PG_SECONDARY_MIGRATE_DB_USER }}"
       {{ PG_SECONDARY_MIGRATE_DB_PASSWORD_LINE }}
     }
-    log4j = ${common-log4j}
+    log4j = ${common-log4j} {
+      rootLogger = [ {{ LOG_LEVEL }}, console ]
+    }
   }
 
   instance = {{ BQ_SECONDARY_INSTANCE }}
 
   bigquery {
     project-id = "thematic-bee-98521"
-    dataset-id = "socrata-data"
+    dataset-id = {{ DATASET_ID }}
     test-project-id = "test"
   }
 
+  log4j.logLevel = {{ LOG_LEVEL }}
 }

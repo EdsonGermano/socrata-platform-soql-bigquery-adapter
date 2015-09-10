@@ -5,12 +5,15 @@ import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, JsonUtil}
 import com.rojoma.simplearm.util._
 import com.socrata.bq.query.RowCount
+import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, ColumnInfo}
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.bq.store.PostgresUniverseCommon
+import com.socrata.bq.store.{BBQColumnInfo, PostgresUniverseCommon}
 import com.socrata.soql.collection.OrderedMap
+import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
+import com.socrata.soql.types.obfuscation.CryptProvider
 import com.typesafe.scalalogging.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.joda.time.DateTime
@@ -44,7 +47,7 @@ object CJSONWriter {
   val dateTimeFormat = ISODateTimeFormat.dateTime
   val utf8EncodingName = scala.io.Codec.UTF8.name
 
-  def writeCJson(datasetInfo: DatasetInfo,
+  def writeCJson(obfuscationKey: Option[Array[Byte]],
                  qrySchema: OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
                  rows: CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]] with RowCount,
                  reqRowCount: Boolean,
@@ -55,7 +58,9 @@ object CJSONWriter {
     r.setContentType("application/json")
     r.setCharacterEncoding(utf8EncodingName)
     val os = r.getOutputStream
-    val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo)
+
+    val cp = new CryptProvider(obfuscationKey.get)
+    val jsonReps = SoQLRep.jsonRep(new SoQLID.StringRep(cp), new SoQLVersion.StringRep(cp))
 
     // Grab the first row in order to get the RowCount (only accessible after beginning to iterate over
     // the BQ results)
@@ -73,12 +78,13 @@ object CJSONWriter {
 
       // Grab the schema, JSON reps, and BQ reps
       val cjsonSortedSchema = qrySchema.values.toSeq.sortWith(_.userColumnId.underlying < _.userColumnId.underlying)
+
       val qryColumnIdToUserColumnIdMap = qrySchema.foldLeft(Map.empty[UserColumnId, ColumnId]) { (map, entry) =>
-        val (cid, cInfo) = entry
-        map + (cInfo.userColumnId -> cid)
+        val (cid, bbqColInfo) = entry
+        map + (bbqColInfo.userColumnId -> cid)
       }
-      val reps = cjsonSortedSchema.map { cinfo => jsonReps(cinfo.typ) }.toArray
-      val cids = cjsonSortedSchema.map { cinfo => qryColumnIdToUserColumnIdMap(cinfo.userColumnId) }.toArray
+      val reps = cjsonSortedSchema.map { bbqColInfo => jsonReps(bbqColInfo.typ) }.toArray
+      val cids = cjsonSortedSchema.map { bbqColInfo => qryColumnIdToUserColumnIdMap(bbqColInfo.userColumnId) }.toArray
 
       // Write row count, schema, data-version, etc. to the JSON
       CompactJsonWriter.toWriter(writer, JObject(Map(

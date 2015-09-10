@@ -178,7 +178,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
         // sadly the COMMENT statement can't use prepared statement params...
         val commentSql = s"COMMENT ON TABLE ${tableName} IS '" +
-          SqlUtils.escapeString(pgu.conn, rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
+          SqlUtils.escapeString(rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
         stmt.execute(commentSql)
       }
     }
@@ -201,7 +201,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   {
     time("populate-rollup-table", "dataset_id" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name.underlying) {
       val soqlAnalysis = analysisToSoQLType(rollupAnalysis)
-      val sqlizer = new SoQLAnalysisSqlizer(soqlAnalysis, copyInfo.dataTableName, rollupReps)
+      val sqlizer = new SoQLAnalysisSqlizer(soqlAnalysis, copyInfo.dataTableName)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.CaseSensitivity -> true
       )
@@ -210,10 +210,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         dsSchema.values.map(ci => ci.userColumnId -> SoQLIndexableRep.sqlRep(ci)).toMap
 
       val selectParamSql = sqlizer.sql(
-        rep = dsRepMap,
+        null,
         setParams = Seq(),
         ctx = sqlCtx,
-        stringLit => SqlUtils.escapeString(pgu.conn, stringLit))
+        stringLit => SqlUtils.escapeString(stringLit))
 
       val insertParamSql = selectParamSql.copy(sql = s"INSERT INTO ${tableName} ( ${selectParamSql.sql} )")
 

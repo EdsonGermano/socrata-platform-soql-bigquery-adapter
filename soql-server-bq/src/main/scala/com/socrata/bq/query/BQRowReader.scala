@@ -12,7 +12,7 @@ import com.socrata.bq.soql._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.typed.ColumnRef
-import com.socrata.soql.types.{SoQLPoint, SoQLText, SoQLValue}
+import com.socrata.soql.types.{SoQLType, SoQLPoint, SoQLText, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
 import scala.collection.JavaConverters._
@@ -21,17 +21,16 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
 
 // TODO: Make this the main class for executing the query
-trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
-  this: AbstractRepBasedDataSqlizer[CT, CV] =>
+class BQRowReader[CT, CV] extends Logging {
 
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
-               toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
-               toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
-               reqRowCount: Boolean,
-               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
-               querier: BigQueryQuerier,
-               bqTableName: String) :
-               CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
+            toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
+//            toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
+            reqRowCount: Boolean,
+            bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
+            querier: BigQueryQuerier,
+            bqTableName: String) :
+  CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     val bQSql = toSql(analysis, bqTableName)
 
@@ -57,7 +56,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   }
 
   def decodeBigQueryRow(decoders: Array[(ColumnId, Int, ((Seq[String]) => CV))])
-    (r: Seq[String]): com.socrata.datacoordinator.Row[CV] = {
+                       (r: Seq[String]): com.socrata.datacoordinator.Row[CV] = {
 
     val row = new MutableRow[CV]
     var i = 0
@@ -108,15 +107,15 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   }
 }
 
-//object EmptyIt extends CloseableIterator[Nothing] with RowCount {
-//  val rowCount = Some(0L)
-//  def hasNext = false
-//  def next() = throw new NoSuchElementException("Called next() on an empty iterator")
-//  def close() {}
-//}
+object EmptyIt extends CloseableIterator[Nothing] with RowCount {
+  val rowCount = Some(0L)
+  def hasNext = false
+  def next() = throw new NoSuchElementException("Called next() on an empty iterator")
+  def close() {}
+}
 
-//trait RowCount {
-//
-//  def rowCount: Option[Long]
-//
-//}
+trait RowCount {
+
+  def rowCount: Option[Long]
+
+}
