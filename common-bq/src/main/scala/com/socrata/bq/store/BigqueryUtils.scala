@@ -59,7 +59,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
 
   private def getMetadataEntry(datasetId: Long): Option[BBQDatasetInfo] = {
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
       val query = s"SELECT copy_number, data_version, locale, last_modified, obfuscation_key FROM $copyInfoTable WHERE dataset_id=?;"
       val stmt = conn.prepareStatement(query)
@@ -91,7 +91,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
     val id = parseDatasetId(datasetInfo.internalName)
     val (copyNumber, version, lastModified) = (copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified)
     val (locale, obfuscationKey) = (datasetInfo.localeName, datasetInfo.obfuscationKey)
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val query = s"""
           |BEGIN;
           |$bbqCopyInfoCreateTableStatement
@@ -107,14 +107,14 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
       val ts = new Timestamp(lastModified.getMillis)
       stmt.setTimestamp(1, ts)
       stmt.setTimestamp(3, ts)
-      stmt.setBytes(2, datasetInfo.obfuscationKey)
-      stmt.setBytes(4, datasetInfo.obfuscationKey)
+      stmt.setBytes(2, obfuscationKey)
+      stmt.setBytes(4, obfuscationKey)
       stmt.executeUpdate()
     }
   }
 
   def setSchema(datasetId: Long, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
 
       // Delete the currently stored schema for this dataset
@@ -123,7 +123,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
            |BEGIN;
            |$bbqColumnMapCreateTableStatement
            |LOCK TABLE $columnMapTable IN SHARE MODE;
-           |DELETE FROM $columnMapTable WHERE dataset_id = '$datasetId';
+           |DELETE FROM $columnMapTable WHERE dataset_id='$datasetId';
          """.stripMargin.trim
       stmt.execute(delete)
 
@@ -156,7 +156,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   }
 
   def getSchema(datasetId: Long): Option[Schema] = {
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
       val query =
         s"""
@@ -204,7 +204,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   }
 
   def getUserToSystemColumnMap(datasetId: Long): Option[Map[UserColumnId, ColumnId]] = {
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
       val query = s"""SELECT system_id, user_column_id FROM $columnMapTable WHERE dataset_id='$datasetId';"""
       val resultSet = stmt.executeQuery(query)
@@ -222,7 +222,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
     None
   }
 
-  private def getConnection() = dsInfo.dataSource.getConnection()
+  private def getConnection = dsInfo.dataSource.getConnection
 }
 
 object BigqueryUtils extends BigqueryUtilsBase
@@ -238,6 +238,7 @@ protected trait BigqueryUtilsBase extends Logging {
   }
 
   // The string identifier for a dataset/table combination used in query strings
+  // e.g. SELECT * FROM [datasetId.tableName] ...
   def makeFullTableIdentifier(datasetId: String, datasetInternalName: String, copyNumber: Long): String = {
     val tableName = makeTableName(datasetInternalName, copyNumber)
     s"[$datasetId.$tableName]"
@@ -269,11 +270,11 @@ protected trait BigqueryUtilsBase extends Logging {
   def makeTableSchema(schema: ColumnIdMap[ColumnInfo[SoQLType]],
                       columnNameMap: ColumnIdMap[String]): TableSchema = {
     // map over the values of schema, converting to bigquery TableFieldSchema
-    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) => {
+    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) =>
       BigQueryRepFactory(info.typ)
           .bigqueryFieldSchema
           .setName(columnNameMap(id))
-    }}
+    }
     new TableSchema().setFields(fields)
   }
 
@@ -284,5 +285,4 @@ protected trait BigqueryUtilsBase extends Logging {
     if (truncate) config.setWriteDisposition("TRUNCATE")
     new Job().setConfiguration(new JobConfiguration().setLoad(config))
   }
-
 }
