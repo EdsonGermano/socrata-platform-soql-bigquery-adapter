@@ -49,8 +49,6 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   val repForIndex: ColumnInfo[SoQLType] => IndexableSqlColumnRep = SoQLIndexableRep.sqlRep _
 
-  val repForSoQLType: SoQLType => IndexableSqlColumnRep = SoQLIndexableRep.sqlRep(_, "")
-
   val repFor = repForIndex
 
   protected val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
