@@ -28,7 +28,7 @@ import java.util.Collection
 /**
  * This class creates our Service to connect to Bigquery including auth.
  */
-object BigqueryServiceFactory {
+object BBQServiceFactory {
   /**
    * Singleton service used through the app.
    */

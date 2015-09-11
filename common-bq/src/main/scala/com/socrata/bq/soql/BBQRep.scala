@@ -3,17 +3,17 @@ package com.socrata.bq.soql
 import com.rojoma.json.v3.ast.JValue
 import com.google.api.services.bigquery.model.TableFieldSchema
 
-trait BigQueryRepBase[Type] {
+trait BBQRepBase[Type] {
   def repType: Type
 //  def base: String
 }
 
-trait BigQueryReadRep[Type, Value] extends BigQueryRepBase[Type] {
+trait BBQReadRep[Type, Value] extends BBQRepBase[Type] {
   def SoQL(row : Seq[String]) : Value
   def numColumns : Int
 }
 
-trait BigQueryWriteRep[Type, Value] extends BigQueryRepBase[Type] {
+trait BBQWriteRep[Type, Value] extends BBQRepBase[Type] {
   val bigqueryType : String
   def bigqueryFieldSchema : TableFieldSchema = bigqueryType match {
     case "RECORD" => ???
@@ -22,4 +22,4 @@ trait BigQueryWriteRep[Type, Value] extends BigQueryRepBase[Type] {
   def jvalue(value: Value) : JValue
 }
 
-trait BigQueryRep[Type, Value] extends BigQueryReadRep[Type, Value] with BigQueryWriteRep[Type, Value]
+trait BBQRep[Type, Value] extends BBQReadRep[Type, Value] with BBQWriteRep[Type, Value]

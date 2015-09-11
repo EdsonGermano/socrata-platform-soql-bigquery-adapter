@@ -24,7 +24,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.language.existentials
 import com.socrata.bq.soql.{CaseSensitive}
 import com.socrata.http.server.util.NoPrecondition
-import com.socrata.bq.query.{TotalRowCount, BigQueryQuerier, BQQueryTestBase}
+import com.socrata.bq.query.{TotalRowCount, BBQQuerier, BQQueryTestBase}
 
 import scala.collection.JavaConversions._
 
@@ -38,11 +38,11 @@ object QueryTest {
 
 class QueryTest extends FunSuite with BeforeAndAfterAll with Matchers {
 
-  var bqQuerier: BigQueryQuerier = null
+  var bqQuerier: BBQQuerier = null
 
   // TODO: Make the test database come from a conf. file
   override def beforeAll() = {
-    bqQuerier = new BigQueryQuerier("thematic-bee-98521")
+    bqQuerier = new BBQQuerier("thematic-bee-98521")
   }
 
   def queryAndCompare(queryString: String, expected: Option[ArrayBuffer[mutable.Buffer[String]]], rc: Integer) = {

@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
-import com.socrata.bq.store.BigqueryUtils
+import com.socrata.bq.store.BBQCommon
 
 import scala.language.existentials
 import com.rojoma.json.v3.ast.JString
@@ -59,7 +59,7 @@ import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 
-class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
+class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
   import QueryServer._
 
   val dsConfig: DataSourceConfig = null // unused
@@ -233,7 +233,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
       }
       val bqReps = generateReps(analysis)
       val qrySchema = querySchema(analysis)
-      val bqRowReader = new BQRowReader[SoQLType, SoQLValue]
+      val bqRowReader = new BBQRowReader[SoQLType, SoQLValue]
 
       // Print the schema for this query
       logger.debug("Query schema: ")
@@ -248,7 +248,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
           new SoQLAnalysisSqlizer(a, tableName).sql(userToSystemColumnMap.map { case (uid, cid) => uid -> bqUtils.makeColumnName(cid, uid) }, Seq.empty, sqlCtx, escape),
         rowCount,
         bqReps,
-        new BigQueryQuerier(config.bigqueryProjectId),
+        new BBQQuerier(config.bigqueryProjectId),
         bqTableName))
       (qrySchema, results)
 
@@ -303,9 +303,9 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
    */
   // TODO: Handle expressions and column aliases.
   private def generateReps(analysis: SoQLAnalysis[UserColumnId, SoQLType]):
-                  OrderedMap[ColumnId, BigQueryReadRep[SoQLType, SoQLValue]] = {
+                  OrderedMap[ColumnId, BBQReadRep[SoQLType, SoQLValue]] = {
 
-    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, BigQueryReadRep[SoQLType, SoQLValue]]) { (map, entry) =>
+    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, BBQReadRep[SoQLType, SoQLValue]]) { (map, entry) =>
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
           val cid = new ColumnId(map.size + 1)
@@ -314,7 +314,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
               logger.info("Bounding box rep")
               new BoundingBoxRep
             }
-            case otherExpr => BigQueryRepFactory(otherExpr.typ)
+            case otherExpr => BBQRepFactory(otherExpr.typ)
           }
           map + (cid -> bqRep)
       }
@@ -468,7 +468,7 @@ object QueryServer extends DynamicPortMap with Logging {
       reporter <- MetricsReporter.managed(config.metrics)
     } {
       pong.start()
-      val queryServer = new QueryServer(config, new BigqueryUtils(dsInfo, config.bigqueryProjectId), dsInfo, CaseSensitive)
+      val queryServer = new QueryServer(config, new BBQCommon(dsInfo, config.bigqueryProjectId), dsInfo, CaseSensitive)
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))

@@ -1,11 +1,11 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JObject, JString, JNull, JValue}
-import com.socrata.bq.soql.BigQueryRep
+import com.socrata.bq.soql.BBQRep
 import com.socrata.soql.types._
 import org.joda.time.{DateTimeZone, DateTime}
 
-class FixedTimestampRep extends BigQueryRep[SoQLType, SoQLValue] {
+class FixedTimestampRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLFixedTimestamp
 
