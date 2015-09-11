@@ -246,12 +246,10 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
         analysis,
         (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
           new SoQLAnalysisSqlizer(a, tableName).sql(userToSystemColumnMap.map { case (uid, cid) => uid -> bqUtils.makeColumnName(cid, uid) }, Seq.empty, sqlCtx, escape),
-        rowCount,
         bqReps,
         new BBQQuerier(config.bigqueryProjectId),
         bqTableName))
       (qrySchema, results)
-
     }
 
     logger.debug(s"execQuery called on $datasetInternalName ($datasetId")
@@ -427,16 +425,12 @@ object QueryServer extends DynamicPortMap with Logging {
     if(ifaces.isEmpty) config
     else {
       val first = JString(ifaces.iterator.next().getHostAddress)
-//      Console.err.println("first" + first)
       val addressConfig = ConfigFactory.parseString("com.socrata.soql-server-bq.service-advertisement.address=" + first)
-//      Console.err.println("addressConfig" + addressConfig)
       config.withFallback(addressConfig)
     }
   }
 
   val config = try {
-//    Console.err.println(ConfigFactory.load())
-//    Console.err.println(withDefaultAddress(ConfigFactory.load()))
     new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-bq")
   } catch {
     case e: Exception =>

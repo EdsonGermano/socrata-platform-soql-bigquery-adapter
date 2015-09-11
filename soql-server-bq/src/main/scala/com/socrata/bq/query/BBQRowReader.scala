@@ -25,8 +25,6 @@ class BBQRowReader[CT, CV] extends Logging {
 
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
             toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
-//            toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
-            reqRowCount: Boolean,
             bqReps: OrderedMap[ColumnId, BBQReadRep[CT, CV]],
             querier: BBQQuerier,
             bqTableName: String) :
