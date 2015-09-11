@@ -24,7 +24,7 @@ import com.socrata.http.common.livenesscheck.LivenessCheckInfo
 import com.socrata.http.server._
 import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.implicits._
-import com.socrata.http.server.livenesscheck.{LivenessCheckResponder}
+import com.socrata.http.server.livenesscheck.LivenessCheckResponder
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
@@ -42,7 +42,7 @@ import com.socrata.bq.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName}
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.{FunctionCall, CoreExpr}
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
@@ -126,8 +126,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
   }
 
   def query(req: HttpRequest): HttpServletResponse => Unit =  {
-    logger.info("query called")
-
     val servReq = req.servletRequest
     val datasetId = servReq.getParameter("dataset")
     val analysisParam = servReq.getParameter("query")
@@ -136,7 +134,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
-//    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
 
     logger.debug("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
@@ -160,7 +157,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
       case Some(cinfo) =>
         logger.debug(s"Found metadata for dataset $datasetName")
         def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
-        execQuery(datasetName, datasetId, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+        execQuery(datasetName, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
           case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
             // Very weird separation of concerns between execQuery and streaming. Most likely we will
             // want yet-another-refactoring where much of execQuery is lifted out into this function.
@@ -184,7 +181,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
 
   def execQuery(
     datasetInternalName: String,
-    datasetId: DatasetId,
     cinfo: BBQDatasetInfo,
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     rowCount: Boolean,
@@ -223,8 +219,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
       SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
       SqlizerContext.CaseSensitivity -> caseSensitivity
     )
+
+    // A function that escapes control characters and special characters for BigQuery queries
     val escape = (stringLit: String) => SqlUtils.escapeString(stringLit)
 
+    // A mapping from user column id to physical column name (as stored in BigQuery)
     val userToPhysicalColumnMapping = bqUtils.getUserToSystemColumnMap(datasetInternalName).getOrElse {
       sys.error("Could not obtain systemToUserColumnMap")
     }
@@ -277,7 +276,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
 
   /**
    * @param analysis parsed soql
-   * @param latest
    * @return a schema for the selected columns
    */
   // TODO: Handle expressions and column aliases.
@@ -308,24 +306,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     bqUtils.getSchema(datasetName)
   }
 
-  // TODO: this is no longer used
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
-    val intRx = "^[0-9]+$".r
-    val rd = pgu.datasetMapReader
-    reqCopy match {
-      case Some("latest") =>
-        rd.latest(datasetInfo)
-      case Some("published") | None =>
-        rd.published(datasetInfo).getOrElse(rd.latest(datasetInfo))
-      case Some("unpublished") | None =>
-        rd.unpublished(datasetInfo).getOrElse(rd.latest(datasetInfo))
-      case Some(intRx(num)) =>
-        rd.copyNumber(datasetInfo, num.toLong).getOrElse(rd.latest(datasetInfo))
-      case Some(unknown) =>
-        throw new IllegalArgumentException(s"invalid copy value $unknown")
-    }
-  }
-
   private def copyInfoHeader(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
     Header("Last-Modified", lastModified.toHttpDate) ~>
       Header("X-SODA2-CopyNumber", copyNumber.toString) ~>
@@ -353,9 +333,7 @@ object QueryServer extends DynamicPortMap with Logging {
     if(ifaces.isEmpty) config
     else {
       val first = JString(ifaces.iterator.next().getHostAddress)
-//      Console.err.println("first" + first)
       val addressConfig = ConfigFactory.parseString("com.socrata.soql-server-bq.service-advertisement.address=" + first)
-//      Console.err.println("addressConfig" + addressConfig)
       config.withFallback(addressConfig)
     }
   }
