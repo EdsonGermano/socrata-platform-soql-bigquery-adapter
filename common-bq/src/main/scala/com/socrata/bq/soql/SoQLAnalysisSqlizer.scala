@@ -143,7 +143,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.zipWithIndex.map{
       case (sql, index) =>
-        // check if it matches one of the aggregates and it doesn't contain any spaces.
+        // check if the selection is a function call, matching the pattern "... function_name(.*) ..."
       if (sql.toLowerCase.matches(".*\\w*\\(.*\\).*")) {
         val alias = s"__$index"
         val newSql = s"$sql AS $alias"
