@@ -6,7 +6,7 @@ import com.socrata.datacoordinator.util.collection.{UserColumnIdMap, ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.id._
-import com.socrata.bq.soql.BigQueryRepFactory
+import com.socrata.bq.soql.BBQRepFactory
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.truth.metadata.{Schema}
 import com.socrata.datacoordinator.util.NullCache
@@ -24,12 +24,12 @@ case class BBQColumnInfo(userColumnId: UserColumnId, soqlTypeName: String) {
 
 case class BBQDatasetInfo(datasetId: Long, copyNumber: Long, dataVersion: Long, lastModified: DateTime, locale: String, obfuscationKey: Array[Byte])
 
-class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadataHandler(dsInfo) with BigqueryUtilsBase {
+class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadataHandler(dsInfo) with BBQCommonBase {
   def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: CopyInfo) =
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
 }
 
-protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BigqueryUtilsBase {
+protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BBQCommonBase {
   private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
   private val bbqCopyInfoCreateTableStatement = s"""
@@ -225,9 +225,9 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   private def getConnection = dsInfo.dataSource.getConnection
 }
 
-object BigqueryUtils extends BigqueryUtilsBase
+object BBQCommon extends BBQCommonBase
 
-protected trait BigqueryUtilsBase extends Logging {
+protected trait BBQCommonBase extends Logging {
 
   def parseDatasetId(datasetInternalName: String): Long = {
     datasetInternalName.split('.')(1).toLong
@@ -271,7 +271,7 @@ protected trait BigqueryUtilsBase extends Logging {
                       columnNameMap: ColumnIdMap[String]): TableSchema = {
     // map over the values of schema, converting to bigquery TableFieldSchema
     val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) =>
-      BigQueryRepFactory(info.typ)
+      BBQRepFactory(info.typ)
           .bigqueryFieldSchema
           .setName(columnNameMap(id))
     }
