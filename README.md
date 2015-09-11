@@ -44,7 +44,7 @@ sbt clean assembly
 Link the secondary-watcher-bq jar:
 
 ```
-ln -s /store-bq/target/scala-2.10/store-bq-assembly-*.jar ~/secondary-stores
+ln -s ./store-bq/target/scala-2.10/store-bq-assembly-*.jar ~/secondary-stores
 ```
 
 
