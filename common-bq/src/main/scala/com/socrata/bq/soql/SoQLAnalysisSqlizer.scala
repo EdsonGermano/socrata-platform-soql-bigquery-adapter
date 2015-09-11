@@ -101,7 +101,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   /**
    * Constructs the full select statement.
    *
-   * @param physicalColumnMapping The mapping from each UserColumnId to a physical column present in the BQ table.
+   * @param physicalColumnMapping The mapping from each UserColumnId to the physical column name present in the BQ table.
    * @param setParams The current sequence of parameters to be injected into the SQL string.
    * @param ctx A map that contains meta-data about how the SQL string is to be constructed.
    * @param escape A function that escapes illegal characters as specified by BigQuery.
@@ -130,15 +130,16 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
 
   /**
    * Maps each function in the select statement to an alias so that it can be referenced outside of the SELECT clause
-   * statement if it is present there.
+   * statement if it is present in a GROUP BY or ORDER BY. BigQuery does not allow function calls in the GROUP BY or
+   * ORDER BY clauses.
    *
    * Example:
    *
-   * ['sum(u_ty3g_fj3t)', 'u_t3ty_f2g3'] => ['sum(u)ty3g_fj3t) AS sum_u_ty3g_fj3t__0]', 'u_t3ty_f2g3']
+   * ['sum(u_ty3g_fj3t)', 'u_t3ty_f2g3'] => ['sum(u)ty3g_fj3t) AS __0]', 'u_t3ty_f2g3']
    *
    * @param select A sequence of strings representing columns to be selected.
-   * @return A modified version of the column names with function name calls and symbols aliased with the AS keyword to
-   *         the same string replaced with _.
+   * @return the selection strings, where selections that contain functions are followed by "... AS __x ...",
+   *         where x is a number that uniquely identifies that alias
    */
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.zipWithIndex.map{
