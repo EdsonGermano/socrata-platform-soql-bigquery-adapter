@@ -30,8 +30,8 @@ class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadataHan
 }
 
 protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BBQCommonBase {
-  private val copyInfoTable = "bbq_copy_info_2"
-  private val columnMapTable = "bbq_column_map_2"
+  private val copyInfoTable = "bbq_copy_info"
+  private val columnMapTable = "bbq_column_map"
 
   // Ensure tables exist.
   for (conn <- managed(getConnection)) {
