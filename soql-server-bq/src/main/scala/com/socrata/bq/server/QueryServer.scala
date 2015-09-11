@@ -193,41 +193,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
 
-    def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
-      val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
-      val sqlCtx = Map[SqlizerContext, Any](
-        SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
-        SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-        SqlizerContext.CaseSensitivity -> caseSensitivity
-      )
-      val escape = (stringLit: String) => SqlUtils.escapeString(stringLit)
-
-      val userToSystemColumnMap = bqUtils.getUserToSystemColumnMap(datasetId.underlying).getOrElse {
-        sys.error("Could not obtain systemToUserColumnMap")
-      }
-      val bqReps = generateReps(analysis)
-      val qrySchema = querySchema(analysis)
-      val bqRowReader = new BBQRowReader[SoQLType, SoQLValue]
-
-      // Print the schema for this query
-      logger.debug("Query schema: ")
-      bqReps.foreach { case (k, v) => logger.debug(s"$k: ${v.repType}") }
-
-      // We need a table name in the form: [dataset-id.table-name] to execute the query
-      val bqTableName = bqUtils.makeFullTableIdentifier(config.bigqueryDatasetId, datasetInternalName, cinfo.copyNumber)
-
-      // Execute the query and retrieve an iterator containing the results
-      val results = managed(bqRowReader.query(
-        analysis,
-        (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-          new SoQLAnalysisSqlizer(a, tableName).sql(userToSystemColumnMap.map { case (uid, cid) => uid -> bqUtils.makeColumnName(cid, uid) }, Seq.empty, sqlCtx, escape),
-        rowCount,
-        bqReps,
-        new BBQQuerier(config.bigqueryProjectId),
-        bqTableName))
-      (qrySchema, results)
-    }
-
     val copyNumber = cinfo.copyNumber
     val versionNumber = cinfo.dataVersion
     val lastModified = cinfo.lastModified
@@ -241,7 +206,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            val (qrySchema, results) = runQuery(analysis, rowCount)
+            val (qrySchema, results) = runQuery(analysis, cinfo, datasetInternalName, rowCount)
             Success(qrySchema, copyNumber, versionNumber, results, etag, lastModified)
         }
       case FailedBecauseMatch(etags) =>
@@ -249,6 +214,41 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
       case FailedBecauseNoMatch =>
         PreconditionFailed
     }
+  }
+
+  def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], cinfo: BBQDatasetInfo, datasetInternalName: String, rowCount: Boolean) = {
+    val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
+    val sqlCtx = Map[SqlizerContext, Any](
+      SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
+      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+      SqlizerContext.CaseSensitivity -> caseSensitivity
+    )
+    val escape = (stringLit: String) => SqlUtils.escapeString(stringLit)
+
+    val userToPhysicalColumnMapping = bqUtils.getUserToSystemColumnMap(datasetInternalName).getOrElse {
+      sys.error("Could not obtain systemToUserColumnMap")
+    }
+    val bqReps = generateReps(analysis)
+    val qrySchema = querySchema(analysis)
+    val bqRowReader = new BBQRowReader[SoQLType, SoQLValue]
+
+    // Print the schema for this query
+    logger.debug("Query schema: ")
+    bqReps.foreach { case (k, v) => logger.debug(s"$k: ${v.repType}") }
+
+    // We need a table name in the form: [dataset-id.table-name] to execute the query
+    val bqTableName = bqUtils.makeFullTableIdentifier(config.bigqueryDatasetId, datasetInternalName, cinfo.copyNumber)
+
+    // Execute the query and retrieve an iterator containing the results
+    val results = managed(bqRowReader.query(
+      analysis,
+      (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+        new SoQLAnalysisSqlizer(a, tableName).sql(userToPhysicalColumnMapping, Seq.empty, sqlCtx, escape),
+      rowCount,
+      bqReps,
+      new BBQQuerier(config.bigqueryProjectId),
+      bqTableName))
+    (qrySchema, results)
   }
 
   /**
