@@ -2,8 +2,8 @@ soql-bigquery-adapter
 =====================
 
 The BigQuery Adapter for SODAServer includes:
-- soql-server-bq: query server for querying datasets in Google BigQuery
-- secondary-watcher-bq: secondary watcher plugin for replicating (big) data
+- **soql-server-bq**: query server for querying datasets in Google BigQuery
+- **secondary-watcher-bq**: secondary watcher plugin for replicating (big) data
 
 ## Build Requirements
 sbt
@@ -19,9 +19,11 @@ sbt test package assembly
 
 ## Setup
 
+#### Credentials
+
 This service requires that a Google BigQuery credentials file is stored in the environment variable `GOOGLE_APPLICATION_CREDENTIALS`.
 
-The credentials file is tied to your Google BigQuery project, which you should specify in the [configuration](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/soql-server-bq/src/main/resources/reference.conf) for the project:
+This credentials file is tied to your Google BigQuery project, which you should specify in the [configuration](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/soql-server-bq/src/main/resources/reference.conf) for the project:
 
 ```
 bigquery {
@@ -29,6 +31,22 @@ bigquery {
     dataset-id: "my_bigquery_dataset_id"
 }
 ```
+
+#### Assembly
+
+To create the jars:
+
+```
+cd $BIGQUERY_ADAPTER_DIR
+sbt clean assembly
+```
+
+Link the secondary-watcher-bq jar:
+
+```
+ln -s /store-bq/target/scala-2.10/store-bq-assembly-*.jar ~/secondary-stores
+```
+
 
 ## Running the service
 
