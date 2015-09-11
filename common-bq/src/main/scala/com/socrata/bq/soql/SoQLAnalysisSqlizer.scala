@@ -11,7 +11,7 @@ import com.socrata.soql.typed.{OrderBy, CoreExpr}
  * @param tableName The BigQuery table name that the statement should query.
  */
 class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableName: String)
-      extends Sqlizer[Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]] {
+      extends Sqlizer[(SoQLAnalysis[UserColumnId, SoQLType], String)] {
 
   import Sqlizer._
   import SqlizerContext._
