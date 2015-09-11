@@ -1,6 +1,5 @@
 package com.socrata.bq.store
 
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.collection.JavaConversions._
 import scala.annotation.tailrec
 
@@ -16,10 +15,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
+import com.socrata.datacoordinator.secondary._
 import com.socrata.bq.soql.BigQueryRepFactory
-
-import scala.collection.mutable.ArrayBuffer
 
 class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: String, val bqDatasetId: String) extends Logging {
   val BATCH_SIZE: Int = config.getInt("batch-size")
@@ -180,8 +177,8 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
   }
 
   def handle(datasetInfo: DatasetInfo,
-             copyInfo: SecondaryCopyInfo,
-             schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+             copyInfo: CopyInfo,
+             schema: ColumnIdMap[ColumnInfo[SoQLType]],
              managedRowIterator: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Unit = {
     logger.info(s"Resyncing ${datasetInfo.internalName}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
