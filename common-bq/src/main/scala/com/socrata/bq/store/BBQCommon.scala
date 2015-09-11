@@ -32,35 +32,38 @@ class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadataHan
 protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BBQCommonBase {
   private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
-  private val bbqCopyInfoCreateTableStatement = s"""
-    |CREATE TABLE IF NOT EXISTS $copyInfoTable (
-    |  dataset_id bigint PRIMARY KEY,
-    |  copy_number bigint,
-    |  data_version bigint,
-    |  last_modified timestamp with time zone,
-    |  locale character varying(40),
-    |  obfuscation_key bytea
-    |);
-    """.stripMargin.trim
 
-  private val bbqColumnMapCreateTableStatement = s"""
-    |CREATE TABLE IF NOT EXISTS $columnMapTable (
-    |  system_id bigint,
-    |  dataset_id bigint,
-    |  user_column_id character varying(40),
-    |  type_name character varying(40),
-    |  is_system_primary_key boolean,
-    |  is_user_primary_key boolean,
-    |  is_version boolean,
-    |  PRIMARY KEY(dataset_id, system_id)
-    |);
-    """.stripMargin.trim
+  // Ensure tables exist.
+  for (conn <- managed(getConnection)) {
+    val stmt = conn.createStatement()
+    stmt.execute(s"""
+      |CREATE TABLE IF NOT EXISTS $columnMapTable (
+      |  system_id bigint,
+      |  dataset_id bigint,
+      |  user_column_id character varying(40),
+      |  type_name character varying(40),
+      |  is_system_primary_key boolean,
+      |  is_user_primary_key boolean,
+      |  is_version boolean,
+      |  PRIMARY KEY(dataset_id, system_id)
+      |);
+    """.stripMargin.trim)
+    stmt.execute(s"""
+      |CREATE TABLE IF NOT EXISTS $copyInfoTable (
+      |  dataset_id bigint PRIMARY KEY,
+      |  copy_number bigint,
+      |  data_version bigint,
+      |  last_modified timestamp with time zone,
+      |  locale character varying(40),
+      |  obfuscation_key bytea
+      |);
+    """.stripMargin.trim)
+  }
 
   private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
 
   private def getMetadataEntry(datasetId: Long): Option[BBQDatasetInfo] = {
     for (conn <- managed(getConnection)) {
-      conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
       val query = s"SELECT copy_number, data_version, locale, last_modified, obfuscation_key FROM $copyInfoTable WHERE dataset_id=?;"
       val stmt = conn.prepareStatement(query)
       stmt.setLong(1, datasetId)
@@ -94,7 +97,6 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BBQComm
     for (conn <- managed(getConnection)) {
       val query = s"""
           |BEGIN;
-          |$bbqCopyInfoCreateTableStatement
           |LOCK TABLE $copyInfoTable IN SHARE MODE;
           |UPDATE $copyInfoTable
           |  SET (copy_number, data_version, last_modified, locale, obfuscation_key) = ('$copyNumber', '$version', ?, '$locale', ?)
@@ -121,7 +123,6 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BBQComm
       val delete =
         s"""
            |BEGIN;
-           |$bbqColumnMapCreateTableStatement
            |LOCK TABLE $columnMapTable IN SHARE MODE;
            |DELETE FROM $columnMapTable WHERE dataset_id='$datasetId';
          """.stripMargin.trim
