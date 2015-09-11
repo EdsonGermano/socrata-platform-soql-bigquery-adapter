@@ -42,7 +42,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   private val dsInfo = dataSourceFromConfig(storeConfig.database)
 
-  private val bigqueryUtils = new BigqueryUtils(dsInfo, storeConfig.projectId)
+  private val bigqueryUtils = new BBQCommon(dsInfo, storeConfig.projectId)
 
   private val resyncHandler = new BBQResyncHandler(storeConfig.resyncConfig, bigquery, storeConfig.projectId, storeConfig.datasetId)
 

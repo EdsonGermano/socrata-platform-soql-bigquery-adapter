@@ -13,7 +13,7 @@ import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.bq.store.BigqueryUtils
+import com.socrata.bq.store.BBQCommon
 
 
 class SqlizerTest extends FunSuite with Matchers {

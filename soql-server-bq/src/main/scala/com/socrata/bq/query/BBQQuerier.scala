@@ -11,7 +11,7 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class BigQueryQuerier(projectId: String) {
+class BBQQuerier(projectId: String) {
 
   @throws(classOf[Exception])
   def query(queryString: String): Iterator[GetQueryResultsResponse] = {
@@ -35,12 +35,12 @@ class BigQueryQuerier(projectId: String) {
   @throws(classOf[IOException])
   @throws(classOf[InterruptedException])
   def run(projectId: String, queryString: String, batch: Boolean, waitTime: Long): Iterator[GetQueryResultsResponse] = {
-    val bigquery: Bigquery = BigqueryServiceFactory.getService
+    val bigquery: Bigquery = BBQServiceFactory.getService
     val query: Job = asyncQuery(bigquery, projectId, queryString, batch)
     val getRequest: Bigquery#Jobs#Get = bigquery.jobs.get(projectId, query.getJobReference.getJobId)
-    BigqueryUtils.pollJob(getRequest, waitTime)
+    BBQUtils.pollJob(getRequest, waitTime)
     val resultsRequest: Bigquery#Jobs#GetQueryResults = bigquery.jobs.getQueryResults(projectId, query.getJobReference.getJobId)
-    BigqueryUtils.getPages(resultsRequest)
+    BBQUtils.getPages(resultsRequest)
   }
 
   /**

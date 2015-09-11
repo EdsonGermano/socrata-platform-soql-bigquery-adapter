@@ -28,8 +28,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
                toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
                reqRowCount: Boolean,
-               bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
-               querier: BigQueryQuerier,
+               bqReps: OrderedMap[ColumnId, BBQReadRep[CT, CV]],
+               querier: BBQQuerier,
                bqTableName: String) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 

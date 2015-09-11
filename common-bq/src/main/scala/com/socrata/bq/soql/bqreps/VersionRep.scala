@@ -1,10 +1,10 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JString, JNull, JValue}
-import com.socrata.bq.soql.BigQueryRep
+import com.socrata.bq.soql.BBQRep
 import com.socrata.soql.types.{SoQLVersion, SoQLType, SoQLValue}
 
-class VersionRep extends BigQueryRep[SoQLType, SoQLValue] {
+class VersionRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLVersion
 

@@ -4,9 +4,9 @@ import com.socrata.bq.soql.bqreps._
 import com.socrata.soql.types._
 import com.typesafe.scalalogging.slf4j.Logging
 
-object BigQueryRepFactory extends Logging {
+object BBQRepFactory extends Logging {
 
-  private val RepFactory = Map[SoQLType, BigQueryRep[SoQLType, SoQLValue]](
+  private val RepFactory = Map[SoQLType, BBQRep[SoQLType, SoQLValue]](
     SoQLVersion -> new VersionRep,
     SoQLID -> new IDRep,
     SoQLText -> new TextRep,
@@ -27,7 +27,7 @@ object BigQueryRepFactory extends Logging {
     SoQLMultiPolygon -> new MultiPolygonRep
   )
 
-  def apply(givenType : SoQLType) : BigQueryRep[SoQLType, SoQLValue] = {
+  def apply(givenType : SoQLType) : BBQRep[SoQLType, SoQLValue] = {
     RepFactory.getOrElse(givenType, new NullRep)
   }
 }

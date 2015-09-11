@@ -21,14 +21,14 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
 
 // TODO: Make this the main class for executing the query
-class BQRowReader[CT, CV] extends Logging {
+class BBQRowReader[CT, CV] extends Logging {
 
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
             toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
 //            toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql, // analysis, tableName
             reqRowCount: Boolean,
-            bqReps: OrderedMap[ColumnId, BigQueryReadRep[CT, CV]],
-            querier: BigQueryQuerier,
+            bqReps: OrderedMap[ColumnId, BBQReadRep[CT, CV]],
+            querier: BBQQuerier,
             bqTableName: String) :
   CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 

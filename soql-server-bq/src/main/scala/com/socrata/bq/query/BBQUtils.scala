@@ -16,7 +16,7 @@ import java.util.NoSuchElementException
 /**
  * Helper functions for the other classes.
  */
-object BigqueryUtils {
+object BBQUtils {
 
   /**
    * Polls the job for completion.
