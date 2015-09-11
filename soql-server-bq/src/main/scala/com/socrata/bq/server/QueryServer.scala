@@ -16,17 +16,15 @@ import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.id.{RollupName, ColumnId, UserColumnId}
-import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.common.AuxiliaryData
 import com.socrata.http.common.livenesscheck.LivenessCheckInfo
 import com.socrata.http.server._
 import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.implicits._
-import com.socrata.http.server.livenesscheck.{LivenessCheckConfig, LivenessCheckResponder}
+import com.socrata.http.server.livenesscheck.{LivenessCheckResponder}
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
@@ -39,22 +37,21 @@ import com.socrata.bq.Schema._
 import com.socrata.bq.query._
 import com.socrata.bq.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.bq.soql._
-import com.socrata.bq.soql.bqreps.MultiPolygonRep
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 import com.socrata.bq.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{TypeName, ColumnName}
+import com.socrata.soql.environment.{ColumnName}
 import com.socrata.soql.typed.{FunctionCall, CoreExpr}
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
-import com.socrata.thirdparty.metrics.{SocrataHttpSupport, Metrics, MetricsReporter}
+import com.socrata.thirdparty.metrics.{SocrataHttpSupport, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
+import javax.servlet.http.HttpServletResponse
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
@@ -72,7 +69,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     import SimpleRouteContext._
     Routes(
       Route("/schema", SchemaResource),
-      Route("/rollups", RollupResource),
+      Route("/rollups", RollupResource), // TODO: remove?
       Route("/query", QueryResource),
       Route("/version", VersionResource)
     )
@@ -176,21 +173,17 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
-    // TODO: Factor out PGU and replace with BigQueryUtils functions, make linear
-    logger.info(s"analysis: ${analysis.toString()}")
-
-    logger.debug(s"streamQueryResults called on dataset $datasetName")
     val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
     bqUtils.getMetadataEntry(datasetName) match {
       case Some(cinfo) =>
+        logger.debug(s"Found metadata for dataset $datasetName")
         def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
-
         execQuery(datasetName, datasetId, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
           case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
             // Very weird separation of concerns between execQuery and streaming. Most likely we will
             // want yet-another-refactoring where much of execQuery is lifted out into this function.
             // This will significantly change the tests; however.
-            logger.info("Success, writing results with CJSONWriter")
+            logger.debug("Success, writing results with CJSONWriter")
             ETag(etag)(resp)
             copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
             for (r <- results) yield {
@@ -202,7 +195,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
             responses.PreconditionFailed(resp)
         }
       case None =>
-        logger.info(s"No metadata entry for dataset $datasetId")
+        logger.info(s"No metadata entry for dataset $datasetName")
         NotFound(resp)
     }
   }
@@ -219,7 +212,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
   ): QueryResult = {
 
     def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
-      logger.debug(s"runQuery called on $datasetInternalName ($datasetId")
       val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
@@ -237,11 +229,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
 
       // Print the schema for this query
       logger.debug("Query schema: ")
-      bqReps.foreach { case (k, v) =>
-        logger.debug(s"$k: ${v.repType}")
-      }
+      bqReps.foreach { case (k, v) => logger.debug(s"$k: ${v.repType}") }
 
+      // We need a table name in the form: [dataset-id.table-name] to execute the query
       val bqTableName = bqUtils.makeFullTableIdentifier(config.bigqueryDatasetId, datasetInternalName, cinfo.copyNumber)
+
+      // Execute the query and retrieve an iterator containing the results
       val results = managed(bqRowReader.query(
         analysis,
         (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
@@ -251,15 +244,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
         new BBQQuerier(config.bigqueryProjectId),
         bqTableName))
       (qrySchema, results)
-
     }
-
-    logger.debug(s"execQuery called on $datasetInternalName ($datasetId")
 
     val copyNumber = cinfo.copyNumber
     val versionNumber = cinfo.dataVersion
-    val etag = etagFromCopy(datasetInternalName, copyNumber, versionNumber)
     val lastModified = cinfo.lastModified
+    val etag = etagFromCopy(datasetInternalName, copyNumber, versionNumber)
 
     // Conditional GET handling
     precondition.check(Some(etag), sideEffectFree = true) match {
@@ -294,7 +284,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
           val cid = new ColumnId(map.size + 1)
           val bqRep = coreExpr match {
             case FunctionCall(function, _) if function.function.identity == "extent" => {
-              logger.info("Bounding box rep")
               new BoundingBoxRep
             }
             case otherExpr => BBQRepFactory(otherExpr.typ)
@@ -407,13 +396,11 @@ object QueryServer extends DynamicPortMap with Logging {
   }
 
   val config = try {
-//    Console.err.println(ConfigFactory.load())
-//    Console.err.println(withDefaultAddress(ConfigFactory.load()))
     new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-bq")
   } catch {
     case e: Exception =>
-      Console.err.println(e)
-      Console.err.println("config function broke")
+      logger.error(s"$e")
+      logger.error("config function broke")
       sys.exit(1)
   }
 
