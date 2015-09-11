@@ -44,9 +44,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
-    val (selectPhrase, setParamsSelect) =
-      if (analysis.groupBy.isEmpty) (funcAlias(Seq("count(*)")), setParams)
-      else select(physicalColumnMapping, setParams, ctxSelect, escape)
+    val (selectPhrase, setParamsSelect) = select(physicalColumnMapping, setParams, ctxSelect, escape)
 
     // WHERE
     val where = analysis.where.map(_.sql(physicalColumnMapping, setParamsSelect, ctx + (SoqlPart -> SoqlWhere), escape))
@@ -146,8 +144,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     select.zipWithIndex.map{
       case (sql, index) =>
         // check if it matches one of the aggregates and it doesn't contain any spaces.
-      if (sql.toLowerCase.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp|utc|msec).*") && !sql.contains(" ")) {
-        val alias = s"${sql.replaceAll(convToUnderScore, "_")}$index"
+      if (sql.toLowerCase.matches(".*\\w*\\(.*\\).*")) {
+        val alias = s"__$index"
         val newSql = s"$sql AS $alias"
         aliasMap += (sql -> alias)
         newSql
