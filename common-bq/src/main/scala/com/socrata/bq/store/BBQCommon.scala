@@ -6,7 +6,7 @@ import com.socrata.datacoordinator.util.collection.{UserColumnIdMap, ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.id._
-import com.socrata.bq.soql.BigQueryRepFactory
+import com.socrata.bq.soql.BBQRepFactory
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.truth.metadata.{Schema}
 import com.socrata.datacoordinator.util.NullCache
@@ -24,43 +24,46 @@ case class BBQColumnInfo(userColumnId: UserColumnId, soqlTypeName: String) {
 
 case class BBQDatasetInfo(datasetId: Long, copyNumber: Long, dataVersion: Long, lastModified: DateTime, locale: String, obfuscationKey: Array[Byte])
 
-class BigqueryUtils(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadataHandler(dsInfo) with BigqueryUtilsBase {
+class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BigqueryMetadataHandler(dsInfo) with BBQCommonBase {
   def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: CopyInfo) =
     super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
 }
 
-protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BigqueryUtilsBase {
+protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BBQCommonBase {
   private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
-  private val bbqCopyInfoCreateTableStatement = s"""
-    |CREATE TABLE IF NOT EXISTS $copyInfoTable (
-    |  dataset_id bigint PRIMARY KEY,
-    |  copy_number bigint,
-    |  data_version bigint,
-    |  last_modified timestamp with time zone,
-    |  locale character varying(40),
-    |  obfuscation_key bytea
-    |);
-    """.stripMargin.trim
 
-  private val bbqColumnMapCreateTableStatement = s"""
-    |CREATE TABLE IF NOT EXISTS $columnMapTable (
-    |  system_id bigint,
-    |  dataset_id bigint,
-    |  user_column_id character varying(40),
-    |  type_name character varying(40),
-    |  is_system_primary_key boolean,
-    |  is_user_primary_key boolean,
-    |  is_version boolean,
-    |  PRIMARY KEY(dataset_id, system_id)
-    |);
-    """.stripMargin.trim
+  // Ensure tables exist.
+  for (conn <- managed(getConnection)) {
+    val stmt = conn.createStatement()
+    stmt.execute(s"""
+      |CREATE TABLE IF NOT EXISTS $columnMapTable (
+      |  system_id bigint,
+      |  dataset_id bigint,
+      |  user_column_id character varying(40),
+      |  type_name character varying(40),
+      |  is_system_primary_key boolean,
+      |  is_user_primary_key boolean,
+      |  is_version boolean,
+      |  PRIMARY KEY(dataset_id, system_id)
+      |);
+    """.stripMargin.trim)
+    stmt.execute(s"""
+      |CREATE TABLE IF NOT EXISTS $copyInfoTable (
+      |  dataset_id bigint PRIMARY KEY,
+      |  copy_number bigint,
+      |  data_version bigint,
+      |  last_modified timestamp with time zone,
+      |  locale character varying(40),
+      |  obfuscation_key bytea
+      |);
+    """.stripMargin.trim)
+  }
 
   private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
 
   private def getMetadataEntry(datasetId: Long): Option[BBQDatasetInfo] = {
-    for (conn <- managed(getConnection())) {
-      conn.createStatement().execute(bbqCopyInfoCreateTableStatement)
+    for (conn <- managed(getConnection)) {
       val query = s"SELECT copy_number, data_version, locale, last_modified, obfuscation_key FROM $copyInfoTable WHERE dataset_id=?;"
       val stmt = conn.prepareStatement(query)
       stmt.setLong(1, datasetId)
@@ -91,10 +94,9 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
     val id = parseDatasetId(datasetInfo.internalName)
     val (copyNumber, version, lastModified) = (copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified)
     val (locale, obfuscationKey) = (datasetInfo.localeName, datasetInfo.obfuscationKey)
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val query = s"""
           |BEGIN;
-          |$bbqCopyInfoCreateTableStatement
           |LOCK TABLE $copyInfoTable IN SHARE MODE;
           |UPDATE $copyInfoTable
           |  SET (copy_number, data_version, last_modified, locale, obfuscation_key) = ('$copyNumber', '$version', ?, '$locale', ?)
@@ -107,23 +109,22 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
       val ts = new Timestamp(lastModified.getMillis)
       stmt.setTimestamp(1, ts)
       stmt.setTimestamp(3, ts)
-      stmt.setBytes(2, datasetInfo.obfuscationKey)
-      stmt.setBytes(4, datasetInfo.obfuscationKey)
+      stmt.setBytes(2, obfuscationKey)
+      stmt.setBytes(4, obfuscationKey)
       stmt.executeUpdate()
     }
   }
 
   def setSchema(datasetId: Long, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
 
       // Delete the currently stored schema for this dataset
       val delete =
         s"""
            |BEGIN;
-           |$bbqColumnMapCreateTableStatement
            |LOCK TABLE $columnMapTable IN SHARE MODE;
-           |DELETE FROM $columnMapTable WHERE dataset_id = '$datasetId';
+           |DELETE FROM $columnMapTable WHERE dataset_id='$datasetId';
          """.stripMargin.trim
       stmt.execute(delete)
 
@@ -156,7 +157,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   }
 
   def getSchema(datasetId: Long): Option[Schema] = {
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
       val query =
         s"""
@@ -204,7 +205,7 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
   }
 
   def getUserToSystemColumnMap(datasetId: Long): Option[Map[UserColumnId, ColumnId]] = {
-    for (conn <- managed(getConnection())) {
+    for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
       val query = s"""SELECT system_id, user_column_id FROM $columnMapTable WHERE dataset_id='$datasetId';"""
       val resultSet = stmt.executeQuery(query)
@@ -222,12 +223,12 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends Bigquer
     None
   }
 
-  private def getConnection() = dsInfo.dataSource.getConnection()
+  private def getConnection = dsInfo.dataSource.getConnection
 }
 
-object BigqueryUtils extends BigqueryUtilsBase
+object BBQCommon extends BBQCommonBase
 
-protected trait BigqueryUtilsBase extends Logging {
+protected trait BBQCommonBase extends Logging {
 
   def parseDatasetId(datasetInternalName: String): Long = {
     datasetInternalName.split('.')(1).toLong
@@ -238,6 +239,7 @@ protected trait BigqueryUtilsBase extends Logging {
   }
 
   // The string identifier for a dataset/table combination used in query strings
+  // e.g. SELECT * FROM [datasetId.tableName] ...
   def makeFullTableIdentifier(datasetId: String, datasetInternalName: String, copyNumber: Long): String = {
     val tableName = makeTableName(datasetInternalName, copyNumber)
     s"[$datasetId.$tableName]"
@@ -269,11 +271,11 @@ protected trait BigqueryUtilsBase extends Logging {
   def makeTableSchema(schema: ColumnIdMap[ColumnInfo[SoQLType]],
                       columnNameMap: ColumnIdMap[String]): TableSchema = {
     // map over the values of schema, converting to bigquery TableFieldSchema
-    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) => {
-      BigQueryRepFactory(info.typ)
+    val fields = schema.iterator.toList.sortBy(_._1.underlying).map { case (id, info) =>
+      BBQRepFactory(info.typ)
           .bigqueryFieldSchema
           .setName(columnNameMap(id))
-    }}
+    }
     new TableSchema().setFields(fields)
   }
 
@@ -284,5 +286,4 @@ protected trait BigqueryUtilsBase extends Logging {
     if (truncate) config.setWriteDisposition("TRUNCATE")
     new Job().setConfiguration(new JobConfiguration().setLoad(config))
   }
-
 }

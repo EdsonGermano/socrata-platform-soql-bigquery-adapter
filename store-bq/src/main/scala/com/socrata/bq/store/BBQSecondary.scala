@@ -13,11 +13,9 @@ import com.socrata.bq.config.{BBQStoreConfig}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
-import com.socrata.bq.SecondaryBase
+import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.ds.PGSimpleDataSource
@@ -44,7 +42,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   private val dsInfo = dataSourceFromConfig(storeConfig.database)
 
-  private val bigqueryUtils = new BigqueryUtils(dsInfo, storeConfig.projectId)
+  private val bigqueryUtils = new BBQCommon(dsInfo, storeConfig.projectId)
 
   private val resyncHandler = new BBQResyncHandler(storeConfig.resyncConfig, bigquery, storeConfig.projectId, storeConfig.datasetId)
 
@@ -101,8 +99,8 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
   }
 
   override def resync(datasetInfo: DatasetInfo,
-                      copyInfo: SecondaryCopyInfo,
-                      schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+                      copyInfo: CopyInfo,
+                      schema: ColumnIdMap[ColumnInfo[SoQLType]],
                       cookie: Secondary.Cookie,
                       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                       rollups: Seq[RollupInfo]): Secondary.Cookie = {

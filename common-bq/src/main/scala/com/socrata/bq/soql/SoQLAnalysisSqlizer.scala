@@ -56,7 +56,15 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val groupBy = analysis.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsWhere)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
       val BQSql(sql, newSetParams) = gb.sql(physicalColumnMapping, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
-        val modifiedSQL = aliasMap.getOrElse(sql, sql) // to reference possible aliases in the SELECT stmt
+      val soqlType = gb.typ
+      // to reference possible aliases in the SELECT stmt
+      val modifiedSQL = soqlType match {
+        // the wrapper TIMESTAMP_TO_MSEC may have been introduced before the alias was added to the map. to reference it
+        // correctly, TIMESTAMP_TO_MSEC is wrapped around the sql in an attempt to get the alias, otherwise, grab it regularly
+        // from the aliasMap.
+        case SoQLFixedTimestamp | SoQLFloatingTimestamp => aliasMap.getOrElse(s"TIMESTAMP_TO_MSEC($sql)", aliasMap.getOrElse(sql, sql))
+        case _ => aliasMap.getOrElse(sql, sql)
+      }
       (t2._1 :+ modifiedSQL, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsWhere)
@@ -71,7 +79,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
         val BQSql(sql, newSetParams) =
           ob.sql(physicalColumnMapping, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
         val modifiedSQL = sql.contains("desc") match {
-          case true => s"${aliasMap.getOrElse(sql.substring(0, sql.indexOf("desc")).trim, sql)} desc"
+          case true => s"${aliasMap.getOrElse(sql.substring(0, sql.indexOf("desc")).trim, sql)}"
           case false => aliasMap.getOrElse(sql, sql)
         }
         (t2._1 :+ modifiedSQL, newSetParams)
@@ -137,7 +145,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.zipWithIndex.map{
       case (sql, index) =>
-      if (sql.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp).*")) {
+        // check if it matches one of the aggregates and it doesn't contain any spaces.
+      if (sql.toLowerCase.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp|utc|msec).*") && !sql.contains(" ")) {
         val alias = s"${sql.replaceAll(convToUnderScore, "_")}$index"
         val newSql = s"$sql AS $alias"
         aliasMap += (sql -> alias)

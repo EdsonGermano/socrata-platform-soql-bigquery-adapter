@@ -1,6 +1,5 @@
 package com.socrata.bq.store
 
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.collection.JavaConversions._
 import scala.annotation.tailrec
 
@@ -16,10 +15,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, ColumnInfo => SecondaryColumnInfo, _}
-import com.socrata.bq.soql.BigQueryRepFactory
-
-import scala.collection.mutable.ArrayBuffer
+import com.socrata.datacoordinator.secondary._
+import com.socrata.bq.soql.BBQRepFactory
 
 class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: String, val bqDatasetId: String) extends Logging {
   val BATCH_SIZE: Int = config.getInt("batch-size")
@@ -159,7 +156,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
     }
 
     try {
-      val job = BigqueryUtils.makeLoadJob(ref)
+      val job = BBQCommon.makeLoadJob(ref)
       val insert = bigquery.jobs.insert(bqProjectId, job, content).setFields("jobReference,status")
       val jobResponse = insert.execute()
 
@@ -180,15 +177,15 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
   }
 
   def handle(datasetInfo: DatasetInfo,
-             copyInfo: SecondaryCopyInfo,
-             schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+             copyInfo: CopyInfo,
+             schema: ColumnIdMap[ColumnInfo[SoQLType]],
              managedRowIterator: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Unit = {
     logger.info(s"Resyncing ${datasetInfo.internalName}")
     val datasetId = parseDatasetId(datasetInfo.internalName)
     // Make table reference and bigquery metadata
-    val columnNames: ColumnIdMap[String] = BigqueryUtils.makeColumnNameMap(schema)
-    val ref = BigqueryUtils.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
-    val bqSchema = BigqueryUtils.makeTableSchema(schema, columnNames)
+    val columnNames: ColumnIdMap[String] = BBQCommon.makeColumnNameMap(schema)
+    val ref = BBQCommon.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
+    val bqSchema = BBQCommon.makeTableSchema(schema, columnNames)
     val table = new Table()
       .setTableReference(ref)
       .setSchema(bqSchema)
@@ -209,7 +206,7 @@ class BBQResyncHandler(config: Config, val bigquery: Bigquery, val bqProjectId: 
             case (map, (id, value)) =>
               columnNames.get(id) match {
                 case None => map
-                case Some(name) => map + ((name, BigQueryRepFactory(schema(id).typ).jvalue(value)))
+                case Some(name) => map + ((name, BBQRepFactory(schema(id).typ).jvalue(value)))
               }
           }
           val jsonifiedRow = JsonUtil.renderJson(rowMap)

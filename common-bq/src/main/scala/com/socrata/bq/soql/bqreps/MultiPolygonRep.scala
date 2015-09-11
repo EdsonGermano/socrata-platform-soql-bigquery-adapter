@@ -1,13 +1,13 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JString, JValue}
-import com.socrata.bq.soql.{BigQueryReadRep, BigQueryRep}
+import com.socrata.bq.soql.{BBQReadRep, BBQRep}
 import com.socrata.soql.types._
 import com.vividsolutions.jts.geom.{MultiPolygon, Coordinate, GeometryFactory}
 import com.vividsolutions.jts.io.{WKBReader, WKBWriter}
 import javax.xml.bind.DatatypeConverter.{parseBase64Binary, printBase64Binary}
 
-class MultiPolygonRep extends BigQueryRep[SoQLType, SoQLValue] {
+class MultiPolygonRep extends BBQRep[SoQLType, SoQLValue] {
 
   private val wkbWriter = new WKBWriter()
   private val wkbReader = new WKBReader()
@@ -29,7 +29,7 @@ class MultiPolygonRep extends BigQueryRep[SoQLType, SoQLValue] {
 }
 
 object MultiPolygonRep {
-  class BoundingBoxRep extends BigQueryReadRep[SoQLType, SoQLValue] {
+  class BoundingBoxRep extends BBQReadRep[SoQLType, SoQLValue] {
 
     private val geomFactory = new GeometryFactory()
 

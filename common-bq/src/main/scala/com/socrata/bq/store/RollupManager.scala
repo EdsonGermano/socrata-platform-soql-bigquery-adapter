@@ -178,7 +178,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
         // sadly the COMMENT statement can't use prepared statement params...
         val commentSql = s"COMMENT ON TABLE ${tableName} IS '" +
-          SqlUtils.escapeString(pgu.conn, rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
+          SqlUtils.escapeString(rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
         stmt.execute(commentSql)
       }
     }
@@ -213,8 +213,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         null,
         setParams = Seq(),
         sqlCtx,
-        stringLit => SqlUtils.escapeString(pgu.conn, stringLit))
-
+        stringLit => SqlUtils.escapeString(stringLit))
       val insertParamSql = selectParamSql.copy(sql = s"INSERT INTO ${tableName} ( ${selectParamSql.sql} )")
 
       logger.info(s"Populating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
