@@ -279,23 +279,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     }
   }
 
-  // TODO: not used
-  private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
-                                                   pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                                                   copyInfo: CopyInfo,
-                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]]):
-    PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
-
-    logger.debug("readerWithQuery called")
-
-    val tableName = copyInfo.dataTableName
-
-    new PGSecondaryRowReader[SoQLType, SoQLValue] (
-      conn,
-      new PostgresRepBasedDataSqlizer(tableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
-      pgu.commonSupport.timingReport) with RowReaderQuerier[SoQLType, SoQLValue]
-  }
-
   /**
    * @param analysis parsed soql
    * @return Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
@@ -366,20 +349,9 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     }
   }
 
-  // Returns the schema the /schema API endpoint
+  // Returns the schema for the /schema API endpoint
   private def getSchema(datasetName : String): Option[Schema] = {
     bqUtils.getSchema(datasetName)
-  }
-
-  // TODO: this is no longer used
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
-                      : Option[CopyInfo] = {
-    for {
-      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
-      datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
-    } yield {
-      getCopy(pgu, datasetInfo, reqCopy)
-    }
   }
 
   // TODO: this is no longer used
