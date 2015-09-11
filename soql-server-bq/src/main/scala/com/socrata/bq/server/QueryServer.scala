@@ -69,7 +69,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     import SimpleRouteContext._
     Routes(
       Route("/schema", SchemaResource),
-      Route("/rollups", RollupResource), // TODO: remove?
       Route("/query", QueryResource),
       Route("/version", VersionResource)
     )
@@ -111,23 +110,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
           Write(JsonContentType)(JsonUtil.writeJson(_, schemaResult, buffer = true))
       case None =>
         logger.debug(s"Cannot find schema for dataset $ds")
-        NotFound
-    }
-  }
-
-  object RollupResource extends SimpleResource {
-    override val get = rollups _
-  }
-
-  def rollups(req: HttpRequest): HttpResponse = {
-    val servReq = req.servletRequest
-    val ds = servReq.getParameter("ds")
-    val copy = Option(servReq.getParameter("copy"))
-    val includeUnmaterialized = java.lang.Boolean.parseBoolean(servReq.getParameter("include_unmaterialized"))
-    getRollups(ds, copy, includeUnmaterialized) match {
-      case Some(rollups) =>
-        OK ~> Write(JsonContentType)(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
-      case None =>
         NotFound
     }
   }
@@ -317,23 +299,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
             coreExpr.typ == SoQLVersion
           )(SoQLTypeContext.typeNamespace, null)
           map + (cid -> cinfo)
-      }
-    }
-  }
-
-  // TODO: this is never used
-  def getRollups(ds: String, reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
-    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      for {
-        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
-        datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
-      } yield {
-        val copy = getCopy(pgu, datasetInfo, reqCopy)
-        if (includeUnmaterialized || RollupManager.shouldMaterializeRollups(copy.lifecycleStage)) {
-          pgu.datasetMapReader.rollups(copy)
-        } else {
-          None
-        }
       }
     }
   }
