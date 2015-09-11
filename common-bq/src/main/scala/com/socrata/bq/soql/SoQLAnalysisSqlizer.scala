@@ -33,14 +33,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   override def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], context: Context, escape: Escape) = {
     val ctx = context + (Analysis -> analysis)
 
-    // The way that this works:
-    // Sqlize each column of each phrase, SELECT, WHERE, GROUP BY, HAVING, and ORDER BY
-    // to convert the user column ids to physical columns and apply appropriate function calls around them (sum, min, max).
-    // Keep on building upon this SQL String until all phrases are complete.
-    //
-    // Rather than embedding the parameters directly in the SQL string, to avoid SQL injection, a Seq[String], setParams,
-    // is built up in each phrase and passed onto each subsequent phrase to be escaped and manually inserted into the
-    // SQL string by the caller.
+    // Construct a SQL statement using the clauses found in the SoQL Analysis. The appropriate function calls are
+    // applied to match BigQuery's SQL-like language.
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
@@ -129,9 +123,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   }
 
   /**
-   * Maps each function in the select statement to an alias so that it can be referenced outside of the SELECT clause
-   * statement if it is present in a GROUP BY or ORDER BY. BigQuery does not allow function calls in the GROUP BY or
-   * ORDER BY clauses.
+   * Maps each function in the select statement to an alias so that it can be referenced outside of the SELECT clause.
+   * BigQuery does not allow function calls in the GROUP BY or ORDER BY clauses.
    *
    * Example:
    *
