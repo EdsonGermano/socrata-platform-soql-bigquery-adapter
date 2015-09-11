@@ -138,7 +138,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     select.zipWithIndex.map{
       case (sql, index) =>
         // check if the selection is a function call, matching the pattern "... function_name(.*) ..."
-      if (sql.toLowerCase.matches(".*\\w*\\(.*\\).*")) {
+      if (sql.toLowerCase.matches(".*\\w+\\(.*\\).*")) {
         val alias = s"__$index"
         val newSql = s"$sql AS $alias"
         aliasMap += (sql -> alias)
