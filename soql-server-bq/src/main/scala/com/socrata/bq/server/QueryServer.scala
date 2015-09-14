@@ -31,7 +31,7 @@ import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, St
 import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.RequestId.ReqIdHeader
-import com.socrata.bq.{SecondaryBase, Version}
+import com.socrata.bq.Version
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.bq.Schema._
 import com.socrata.bq.query._
@@ -56,12 +56,8 @@ import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 
-class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
+class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends Logging {
   import QueryServer._
-
-  val dsConfig: DataSourceConfig = null // unused
-
-  val postgresUniverseCommon = PostgresUniverseCommon
 
   private val JsonContentType = "application/json; charset=utf-8"
 
