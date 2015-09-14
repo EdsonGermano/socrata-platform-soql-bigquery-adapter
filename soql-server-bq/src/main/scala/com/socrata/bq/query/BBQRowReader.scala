@@ -1,26 +1,15 @@
 package com.socrata.bq.query
 
-import com.google.api.services.bigquery.model.{TableCell, TableRow, GetQueryResultsResponse}
-import com.mchange.v2.c3p0.impl.NewProxyPreparedStatement
-import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.datacoordinator.{id, Row, MutableRow}
+import com.google.api.services.bigquery.model.{TableRow, GetQueryResultsResponse}
+import com.socrata.datacoordinator.{Row, MutableRow}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.bq.soql._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.typed.ColumnRef
-import com.socrata.soql.types.{SoQLType, SoQLPoint, SoQLText, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
 import scala.collection.JavaConverters._
 
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable
-
-// TODO: Make this the main class for executing the query
 class BBQRowReader[CT, CV] extends Logging {
 
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
