@@ -119,7 +119,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       }
       (t2._1 :+ conversion, newSetParams)
     }
-    (funcAlias(conv), params)
+    if (analysis.groupBy.isEmpty && analysis.orderBy.isEmpty) (conv, params)
+    else (funcAlias(conv), params)
   }
 
   /**
