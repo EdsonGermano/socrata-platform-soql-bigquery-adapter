@@ -50,7 +50,6 @@ object CJSONWriter {
   def writeCJson(obfuscationKey: Option[Array[Byte]],
                  qrySchema: OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
                  rows: CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]] with RowCount,
-                 reqRowCount: Boolean,
                  dataVersion: Long,
                  lastModified: DateTime,
                  locale: String = "en_US") = (r: HttpServletResponse) => {

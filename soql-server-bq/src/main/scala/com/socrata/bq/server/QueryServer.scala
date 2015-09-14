@@ -126,13 +126,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     val datasetId = servReq.getParameter("dataset")
     val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
-    val schemaHash = servReq.getParameter("schemaHash")
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
-    val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
 
     logger.debug("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
+    streamQueryResults(analysis, datasetId, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -143,7 +141,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
   def streamQueryResults(
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     datasetName:String,
-    reqRowCount: Boolean,
     copy: Option[String],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
@@ -153,7 +150,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
       case Some(cinfo) =>
         logger.debug(s"Found metadata for dataset $datasetName")
         def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
-        execQuery(datasetName, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+        execQuery(datasetName, cinfo, analysis, copy, precondition, ifModifiedSince) match {
           case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
             // Very weird separation of concerns between execQuery and streaming. Most likely we will
             // want yet-another-refactoring where much of execQuery is lifted out into this function.
@@ -162,7 +159,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
             ETag(etag)(resp)
             copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
             for (r <- results) yield {
-              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
+              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, dataVersion, lastModified)(resp)
             }
           case NotModified(etags) =>
             notModified(etags)(resp)
@@ -179,7 +176,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     datasetInternalName: String,
     cinfo: BBQDatasetInfo,
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
-    rowCount: Boolean,
     reqCopy: Option[String],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
@@ -198,7 +194,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            val (qrySchema, results) = runQuery(analysis, cinfo, datasetInternalName, rowCount)
+            val (qrySchema, results) = runQuery(analysis, cinfo, datasetInternalName)
             Success(qrySchema, copyNumber, versionNumber, results, etag, lastModified)
         }
       case FailedBecauseMatch(etags) =>
@@ -208,7 +204,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     }
   }
 
-  def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], cinfo: BBQDatasetInfo, datasetInternalName: String, rowCount: Boolean) = {
+  def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], cinfo: BBQDatasetInfo, datasetInternalName: String) = {
     val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
     val sqlCtx = Map[SqlizerContext, Any](
       SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
@@ -239,7 +235,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
       analysis,
       (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
         new SoQLAnalysisSqlizer(a, tableName).sql(userToPhysicalColumnMapping, Seq.empty, sqlCtx, escape),
-      rowCount,
       bqReps,
       new BBQQuerier(config.bigqueryProjectId),
       bqTableName))
