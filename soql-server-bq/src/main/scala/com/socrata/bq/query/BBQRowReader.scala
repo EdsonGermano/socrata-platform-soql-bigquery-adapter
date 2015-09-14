@@ -12,6 +12,15 @@ import scala.collection.JavaConverters._
 
 class BBQRowReader[CT, CV] extends Logging {
 
+  /**
+   * Execute a query against BigQuery and return the results and row count
+   * @param analysis parsed soql
+   * @param toSql function to convert the analysis to BQSql
+   * @param bqReps a map from column id to conversion rep for each column selected in the query
+   * @param querier connection to BigQuery for issuing the query
+   * @param bqTableName the name of the table in BigQuery
+   * @return an iterator over the rows of the result and a row count
+   */
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
             toSql: (SoQLAnalysis[UserColumnId, CT], String) => BQSql,
             bqReps: OrderedMap[ColumnId, BBQReadRep[CT, CV]],
@@ -20,19 +29,18 @@ class BBQRowReader[CT, CV] extends Logging {
   CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     val bQSql = toSql(analysis, bqTableName)
+    val queryStr = bQSql.injectParams
 
-    logger.debug(s"RAW QUERY $bQSql")
+    logger.debug(s"Raw query: $bQSql")
+    logger.debug(s"Query: $queryStr")
 
-    val params = bQSql.setParams.toIterator
-    val queryStr = bQSql.sql.toList.map(e => e.toString).map(s => if (s.equals("?") && params.hasNext) params.next else s).mkString
-
-    logger.debug(s"QUERY: $queryStr")
-
+    // Grab the SoQL conversion function for each selected column's rep
     val decoders = bqReps.map { case (cid, rep) =>
       (cid, rep.numColumns, rep.SoQL(_))
     }.toArray
 
-    // get rows
+    // If the query contains a selection, issue the query and return an iterator over the resulting rows, otherwise
+    // return an empty iterator
     if (analysis.selection.size > 0) {
       val bqResult = querier.query(queryStr)
       new BigQueryResultIt(bqResult, decodeBigQueryRow(decoders))
@@ -59,7 +67,6 @@ class BBQRowReader[CT, CV] extends Logging {
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
     var rowCount: Option[Long] = None
-
     private var rowIt: Option[Iterator[TableRow]] = None
 
     override def next(): Row[CV] = {
@@ -102,7 +109,5 @@ object EmptyIt extends CloseableIterator[Nothing] with RowCount {
 }
 
 trait RowCount {
-
   def rowCount: Option[Long]
-
 }
