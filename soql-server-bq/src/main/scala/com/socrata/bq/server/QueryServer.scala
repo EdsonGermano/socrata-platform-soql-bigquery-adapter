@@ -90,6 +90,17 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     override val get = schema _
   }
 
+  object QueryResource extends SimpleResource {
+    override val get = query _
+    override val post = query _
+  }
+
+  /**
+   * Look up schema for the /schema API endpoint
+   * @param req GET request specifying a dataset name
+   * @return HTTP response containing the schema of a dataset, if known.
+   *         Returns a 404 if that dataset is unknown.
+   */
   def schema(req: HttpRequest): HttpResponse = {
     val servReq = req.servletRequest
     val ds = servReq.getParameter("ds")
@@ -110,17 +121,13 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     }
   }
 
-  object QueryResource extends SimpleResource {
-    override val get = query _
-    override val post = query _
-  }
-
-  def etagFromCopy(datasetInternalName: String, copyNum: Long, versionNum: Long): EntityTag = {
-    // ETag is a hash based on datasetInternalName_copyNumber_version
-    val etagContents = s"${datasetInternalName}_${copyNum}_${versionNum}"
-    StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
-  }
-
+  /**
+   * Perform the requested query
+   * @param req GET or POST request containing the query and associated information
+   * @return HTTP response containing the result of the query, plus the schema of the dataset.
+   *         Returns a 404 (Not Found) if the dataset is unknown.
+   *         Returns a 304 (Not Modified) if the response is unmodified.
+   */
   def query(req: HttpRequest): HttpServletResponse => Unit =  {
     val servReq = req.servletRequest
     val datasetId = servReq.getParameter("dataset")
@@ -131,6 +138,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
 
     logger.debug("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
+  }
+
+  def etagFromCopy(datasetInternalName: String, copyNum: Long, versionNum: Long): EntityTag = {
+    // ETag is a hash based on datasetInternalName_copyNumber_version
+    val etagContents = s"${datasetInternalName}_${copyNum}_${versionNum}"
+    StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
   /**
@@ -149,7 +162,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     bqUtils.getMetadataEntry(datasetName) match {
       case Some(cinfo) =>
         logger.debug(s"Found metadata for dataset $datasetName")
-        def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
         execQuery(datasetName, cinfo, analysis, copy, precondition, ifModifiedSince) match {
           case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
             // Very weird separation of concerns between execQuery and streaming. Most likely we will
@@ -172,6 +184,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     }
   }
 
+  /**
+   * Checks modification date of dataset to determine if response has changed. Executes the query if the dataset
+   * has been modified and returns results.
+   * @return QueryResult containing the result of the query
+   */
   def execQuery(
     datasetInternalName: String,
     cinfo: BBQDatasetInfo,
@@ -204,6 +221,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     }
   }
 
+  /**
+   * Converts the analysis to a SQL query, then runs the query against the specified dataset in BigQuery and acquires
+   * the results.
+   * @return an iterator over the datacoordinator.Rows in the result of the query
+   *         and a QuerySchema describing the schema of the dataset
+   */
   def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], cinfo: BBQDatasetInfo, datasetInternalName: String) = {
     val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
     val sqlCtx = Map[SqlizerContext, Any](
@@ -241,10 +264,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     (qrySchema, results)
   }
 
+  def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
+
   /**
+   * Use the query schema to create the appropriate BigQueryReps for the SoQLTypes associated with each column.
    * @param analysis parsed soql
-   * @return Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
-   *         associated with each column.
+   * @return a map from column id to conversion rep
    */
   // TODO: Handle expressions and column aliases.
   private def generateReps(analysis: SoQLAnalysis[UserColumnId, SoQLType]):
@@ -254,10 +279,11 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
           val cid = new ColumnId(map.size + 1)
+
+          // The "extent" query is a special case of querying SoQLPoints but returning a SoQLMultiPolygon,
+          // so we need to create a BoundingBoxRep to perform that conversion
           val bqRep = coreExpr match {
-            case FunctionCall(function, _) if function.function.identity == "extent" => {
-              new BoundingBoxRep
-            }
+            case FunctionCall(function, _) if function.function.identity == "extent" => new BoundingBoxRep
             case otherExpr => BBQRepFactory(otherExpr.typ)
           }
           map + (cid -> bqRep)
@@ -266,6 +292,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
   }
 
   /**
+   * A schema for use in JSON response to /query API endpoint
    * @param analysis parsed soql
    * @return a schema for the selected columns
    */
@@ -292,7 +319,10 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
     }
   }
 
-  // Returns the schema for the /schema API endpoint
+    /**
+     * Returns the schema for the /schema API endpoint
+     * @param datasetName dataset name in the form "primus.123"
+     */
   private def getSchema(datasetName : String): Option[Schema] = {
     bqUtils.getSchema(datasetName)
   }
