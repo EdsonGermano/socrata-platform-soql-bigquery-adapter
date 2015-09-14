@@ -102,19 +102,8 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
 
   val underlying = expr
 
+  // Convert all user column ids to physical column names to reference the columns as stored in BigQuery.
   def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
     BQSql(physicalColumnMapping(expr.column), setParams)
-//    BQSql(toUpper(expr.column.underlying, ctx), setParams)
-//    reps.get(expr.column) match {
-//      case Some(rep) =>
-//        val maybeUpperPhysColumns = rep.physColumns.map(toUpper(_, ctx))
-//        BQSql(maybeUpperPhysColumns.mkString(","), setParams)
-//      case None =>
-//        BQSql(toUpper(expr.column.underlying, ctx), setParams) // for tests
-//    }
   }
-
-  private def toUpper(phyColumn: String, ctx: Context): String =
-    if (expr.typ == SoQLText && useUpper(ctx) ) s"upper($phyColumn)"
-    else phyColumn
 }

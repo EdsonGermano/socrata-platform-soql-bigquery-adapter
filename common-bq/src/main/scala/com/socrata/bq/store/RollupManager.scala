@@ -212,9 +212,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       val selectParamSql = sqlizer.sql(
         null,
         setParams = Seq(),
-        ctx = sqlCtx,
+        sqlCtx,
         stringLit => SqlUtils.escapeString(stringLit))
-
       val insertParamSql = selectParamSql.copy(sql = s"INSERT INTO ${tableName} ( ${selectParamSql.sql} )")
 
       logger.info(s"Populating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
