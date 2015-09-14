@@ -43,7 +43,6 @@ class SqlUtilsTest extends FunSuite with Matchers with PropertyChecks {
 
   test("String literal w/o special chars, single quote, or double quote") {
     forAll(Gen.alphaStr) { s: String =>
-      println(s)
       SqlUtils.escapeString(s) should be (s)
     }
   }

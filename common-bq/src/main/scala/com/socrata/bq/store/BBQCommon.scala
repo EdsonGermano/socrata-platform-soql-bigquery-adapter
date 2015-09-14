@@ -204,17 +204,38 @@ protected abstract class BigqueryMetadataHandler(dsInfo: DSInfo) extends BBQComm
     None
   }
 
-  def getUserToSystemColumnMap(datasetId: Long): Option[Map[UserColumnId, ColumnId]] = {
+  /**
+   * Converts the schema for the given dataset to a mapping of user column id to physical column name.
+   *
+   * Example:
+   *
+   * Schema
+   *    system_id  user_column_id
+   *    0          :created_at
+   *    1          dhla-89ak
+   *    2          a9dj-23ox
+   *
+   * Map(
+   *    :created_at -> s_created_at_0
+   *    dhla-89ak -> u_dhla-89ak_1
+   *    a9dj-23ox -> u_a9dj_23ox_2
+   * )
+   *
+   * @param datasetInternalName
+   * @return
+   */
+  def getUserToSystemColumnMap(datasetInternalName: String): Option[Map[UserColumnId, String]] = {
+    val datasetId = parseDatasetId(datasetInternalName)
     for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
       val query = s"""SELECT system_id, user_column_id FROM $columnMapTable WHERE dataset_id='$datasetId';"""
       val resultSet = stmt.executeQuery(query)
-      val systemToUserColumnMap = scala.collection.mutable.Map[UserColumnId, ColumnId]()
+      val systemToUserColumnMap = scala.collection.mutable.Map[UserColumnId, String]()
 
       while (resultSet.next()) {
-        val columnId = resultSet.getInt("system_id")
-        val userColumnId = resultSet.getString("user_column_id")
-        systemToUserColumnMap += new UserColumnId(userColumnId) -> new ColumnId(columnId) 
+        val columnId = new ColumnId(resultSet.getInt("system_id"))
+        val userColumnId = new UserColumnId(resultSet.getString("user_column_id"))
+        systemToUserColumnMap += userColumnId -> makeColumnName(columnId, userColumnId)
       }
       if (systemToUserColumnMap.nonEmpty) {
         return Some(systemToUserColumnMap.toMap)
