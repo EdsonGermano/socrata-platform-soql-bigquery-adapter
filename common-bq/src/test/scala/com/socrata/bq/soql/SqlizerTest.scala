@@ -52,7 +52,7 @@ class SqlizerTest extends FunSuite with Matchers {
   test("extent") {
     val soql = "select extent(point)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT MIN(point.lat), MIN(point.long), MAX(point.lat), MAX(point.long) AS __0 FROM t1")
+    sql should be ("SELECT MIN(point.lat), MIN(point.long), MAX(point.lat), MAX(point.long) FROM t1")
     setParams.length should be (0)
   }
 
@@ -98,15 +98,14 @@ class SqlizerTest extends FunSuite with Matchers {
   test("select count(*)") {
     val soql = "select count(*)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(*)) AS __0 FROM t1")
+    sql should be ("SELECT (count(*)) FROM t1")
     setParams.length should be (0)
   }
 
   test("select aggregate functions") {
     val soql = "select count(id), avg(id), min(id), max(id), sum(id)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(id)) AS __0,(avg(id)) AS __1,(min(id)) AS __2,(max(id)) AS " +
-      "__3,(sum(id)) AS __4 FROM t1")
+    sql should be ("SELECT (count(id)),(avg(id)),(min(id)),(max(id)),(sum(id)) FROM t1")
     setParams.length should be (0)
   }
 
