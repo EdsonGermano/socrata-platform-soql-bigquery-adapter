@@ -25,5 +25,5 @@ class FloatingTimestampRep extends BBQRep[SoQLType, SoQLValue] {
     else JString(SoQLFloatingTimestamp.StringRep(value.asInstanceOf[SoQLFloatingTimestamp].value))
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

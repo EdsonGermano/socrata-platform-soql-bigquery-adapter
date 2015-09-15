@@ -23,5 +23,5 @@ class BooleanRep extends BBQRep[SoQLType, SoQLValue] {
     else JBoolean(value.asInstanceOf[SoQLBoolean].value)
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

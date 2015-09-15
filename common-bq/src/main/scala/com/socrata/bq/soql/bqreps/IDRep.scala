@@ -20,5 +20,5 @@ class IDRep extends BBQRep[SoQLType, SoQLValue] {
     else JString(value.asInstanceOf[SoQLID].value.toString)
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }
