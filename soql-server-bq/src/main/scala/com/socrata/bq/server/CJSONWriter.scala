@@ -7,11 +7,9 @@ import com.rojoma.simplearm.util._
 import com.socrata.bq.query.RowCount
 import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, ColumnInfo}
+import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.bq.store.{BBQColumnInfo, PostgresUniverseCommon}
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.typesafe.scalalogging.slf4j.Logger

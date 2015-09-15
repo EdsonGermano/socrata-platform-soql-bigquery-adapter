@@ -6,10 +6,9 @@ import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.bigquery.{Bigquery, BigqueryScopes}
 
-import collection.JavaConversions._
 import com.rojoma.simplearm.Managed
 import com.socrata.soql.types._
-import com.socrata.bq.config.{BBQStoreConfig}
+import com.socrata.bq.config.BBQStoreConfig
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
@@ -21,8 +20,6 @@ import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.ds.PGSimpleDataSource
 
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
-
-  private val copyTable = "bbq_copy_info_2"
 
   logger.info(s"config: ${config.toString}")
 

@@ -20,7 +20,7 @@ object BBQRepFactory extends Logging {
     ),
     SoQLFixedTimestamp -> new FixedTimestampRep,
     SoQLFloatingTimestamp -> new FloatingTimestampRep,
-    SoQLDate -> new DateRep,    // Date may not be working correctly
+    SoQLDate -> new DateRep,
     SoQLDouble -> new DoubleRep,
     SoQLBoolean -> new BooleanRep,
     SoQLPoint -> new PointRep,
