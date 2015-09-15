@@ -3,14 +3,10 @@ package com.socrata.bq.query
 import com.google.api.client.json.GenericJson
 import com.google.api.services.bigquery.Bigquery
 import com.google.api.services.bigquery.BigqueryRequest
-import com.google.api.services.bigquery.model.DatasetList
 import com.google.api.services.bigquery.model.Job
 
-import com.google.api.services.bigquery.model.TableRow
 import java.io.IOException
-import java.io.PrintStream
 import java.util.Iterator
-import java.util.List
 import java.util.NoSuchElementException
 
 /**

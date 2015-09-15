@@ -4,12 +4,7 @@ import java.io.IOException
 
 import com.google.api.services.bigquery.Bigquery
 import com.google.api.services.bigquery.model._
-
 import scala.collection.JavaConversions._
-
-
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 class BBQQuerier(projectId: String) {
 

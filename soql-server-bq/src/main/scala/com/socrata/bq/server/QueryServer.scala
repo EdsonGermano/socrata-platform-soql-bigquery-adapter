@@ -2,7 +2,6 @@ package com.socrata.bq.server
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
-import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
 import com.socrata.bq.store.BBQCommon

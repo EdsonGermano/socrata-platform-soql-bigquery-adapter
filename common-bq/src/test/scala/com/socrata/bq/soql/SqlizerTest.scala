@@ -2,19 +2,15 @@ package com.socrata.bq.soql
 
 import org.scalatest.{Matchers, FunSuite}
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.bq.soql.SqlizerContext._
-import com.socrata.bq.store.PostgresUniverseCommon
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.bq.store.BBQCommon
-
 
 class SqlizerTest extends FunSuite with Matchers {
 
@@ -138,7 +134,6 @@ object SqlizerTest {
   )
 
   private def sqlize(soql: String, caseSensitivity: CaseSensitivity): BQSql = {
-    val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
     (analysis, "t1").sql(
       columnMap.map { case (cname, cinfo) => (new UserColumnId(cname.toString()), cname.toString()) },
