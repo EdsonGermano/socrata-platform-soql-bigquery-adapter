@@ -22,8 +22,8 @@ class MultiPolygonRep extends BBQRep[SoQLType, SoQLValue] {
     JString(printBase64Binary(bytes))
   }
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
-    SoQLMultiPolygon(wkbReader.read(parseBase64Binary(row.head)).asInstanceOf[MultiPolygon])
+  override def SoQL(cols: Seq[String]): SoQLValue = {
+    SoQLMultiPolygon(wkbReader.read(parseBase64Binary(cols.head)).asInstanceOf[MultiPolygon])
   }
 
   override val numColumns: Int = 1
@@ -42,13 +42,13 @@ object MultiPolygonRep {
     override def repType: SoQLType = SoQLMultiPolygon
 
     // Expects a series of points: [(minLat, minLong), (maxLat, maxLong)]
-    override def SoQL(row: Seq[String]): SoQLValue = {
-      if (row(0) == null || row(1) == null || row(2) == null || row(3) == null) SoQLNull
+    override def SoQL(cols: Seq[String]): SoQLValue = {
+      if (cols(0) == null || cols(1) == null || cols(2) == null || cols(3) == null) SoQLNull
       else {
-        val minLat = row(0).toDouble
-        val minLong = row(1).toDouble
-        val maxLat = row(2).toDouble
-        val maxLong = row(3).toDouble
+        val minLat = cols(0).toDouble
+        val minLong = cols(1).toDouble
+        val maxLat = cols(2).toDouble
+        val maxLong = cols(3).toDouble
         SoQLMultiPolygon(geomFactory.createMultiPolygon(
           Array(geomFactory.createPolygon(geomFactory.createLinearRing(Array(
             new Coordinate(minLong, minLat),
