@@ -11,7 +11,7 @@ class BooleanRep extends BBQRep[SoQLType, SoQLValue] {
   override val bigqueryType: String = "BOOLEAN"
 
   override def SoQL(row: Seq[String]): SoQLValue = {
-    row(0) match {
+    row.head match {
       case null => SoQLNull
       case "true" => SoQLBoolean(true)
       case _ => SoQLBoolean(false)
