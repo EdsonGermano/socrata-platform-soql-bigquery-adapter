@@ -8,12 +8,12 @@ import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.id._
 import com.socrata.bq.soql.BBQRepFactory
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.truth.metadata.{Schema}
+import com.socrata.datacoordinator.truth.metadata.Schema
 import com.socrata.datacoordinator.util.NullCache
 import com.socrata.soql.environment.TypeName
 
 import collection.JavaConversions._
-import java.sql.{ResultSet, Timestamp}
+import java.sql.Timestamp
 import com.typesafe.scalalogging.slf4j.Logging
 import com.google.api.services.bigquery.model._
 import org.joda.time.DateTime

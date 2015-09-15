@@ -2,7 +2,7 @@ package com.socrata.bq.store
 
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Matchers, FunSuite}
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Gen
 
 class SqlUtilsTest extends FunSuite with Matchers with PropertyChecks {
 

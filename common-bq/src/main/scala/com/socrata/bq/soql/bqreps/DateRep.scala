@@ -5,7 +5,6 @@ import com.socrata.bq.soql.BBQRep
 import com.socrata.soql.types.{SoQLNull, SoQLDate, SoQLValue, SoQLType}
 import org.joda.time.LocalDate
 
-// Broken for now
 class DateRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLDate

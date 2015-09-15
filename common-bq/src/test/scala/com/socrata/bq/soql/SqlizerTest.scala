@@ -1,9 +1,7 @@
 package com.socrata.bq.soql
 
 import org.scalatest.{Matchers, FunSuite}
-import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.truth.metadata.ColumnInfo
+import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.bq.soql.SqlizerContext._
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
@@ -166,21 +164,6 @@ object SqlizerTest {
     ColumnName("line") -> (17, SoQLLine),
     ColumnName("multipoint") -> (18, SoQLMultiPoint)
   )
-
-  private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {
-    case (columnName: ColumnName, (id, typ)) =>
-      val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType](
-        null,
-        new ColumnId(id),
-        new UserColumnId(columnName.caseFolded),
-        typ,
-        columnName.caseFolded,
-        typ == SoQLID,
-        false, // isUserKey
-        typ == SoQLVersion
-      )(SoQLTypeContext.typeNamespace, null)
-      acc :+ cinfo
-  }}
 
   private val datasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
     val schema = new OrderedMap[ColumnName, SoQLType](columnMap,  columnMap.keys.toVector)

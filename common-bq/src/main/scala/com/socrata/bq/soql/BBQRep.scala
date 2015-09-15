@@ -5,7 +5,6 @@ import com.google.api.services.bigquery.model.TableFieldSchema
 
 trait BBQRepBase[Type] {
   def repType: Type
-//  def base: String
 }
 
 trait BBQReadRep[Type, Value] extends BBQRepBase[Type] {

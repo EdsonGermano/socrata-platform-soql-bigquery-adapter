@@ -2,7 +2,7 @@ package com.socrata.bq.server.config
 
 import com.typesafe.config.Config
 import com.socrata.http.server.livenesscheck.LivenessCheckConfig
-import com.socrata.bq.config.{StoreConfig}
+import com.socrata.bq.config.StoreConfig
 import com.socrata.thirdparty.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass

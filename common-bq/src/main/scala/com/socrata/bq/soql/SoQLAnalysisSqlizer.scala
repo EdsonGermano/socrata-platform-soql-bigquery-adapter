@@ -149,5 +149,4 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       }
     }
   }
-
 }
