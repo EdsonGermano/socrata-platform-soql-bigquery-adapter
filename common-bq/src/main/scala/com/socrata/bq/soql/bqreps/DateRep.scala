@@ -18,5 +18,5 @@ class DateRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def jvalue(value: SoQLValue): JValue = ???
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

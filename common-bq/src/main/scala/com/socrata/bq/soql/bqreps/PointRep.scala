@@ -51,5 +51,5 @@ class PointRep extends BBQRep[SoQLType, SoQLValue] {
     ))
   }
 
-  override def numColumns: Int = 2
+  override val numColumns: Int = 2
 }

@@ -22,5 +22,5 @@ class TextRep extends BBQRep[SoQLType, SoQLValue] {
     else JString(value.asInstanceOf[SoQLText].value)
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

@@ -26,7 +26,7 @@ class MultiPolygonRep extends BBQRep[SoQLType, SoQLValue] {
     SoQLMultiPolygon(wkbReader.read(parseBase64Binary(row.head)).asInstanceOf[MultiPolygon])
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }
 
 object MultiPolygonRep {
@@ -60,6 +60,6 @@ object MultiPolygonRep {
       }
     }
 
-    override def numColumns: Int = 4
+    override val numColumns: Int = 4
   }
 }

@@ -22,5 +22,5 @@ class NumberLikeRep(encode: java.math.BigDecimal => SoQLValue,
     else JNumber(decode(value))
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

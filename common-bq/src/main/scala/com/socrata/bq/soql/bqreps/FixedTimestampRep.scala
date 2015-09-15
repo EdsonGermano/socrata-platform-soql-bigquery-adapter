@@ -25,5 +25,5 @@ class FixedTimestampRep extends BBQRep[SoQLType, SoQLValue] {
     else JString(SoQLFixedTimestamp.StringRep(value.asInstanceOf[SoQLFixedTimestamp].value))
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

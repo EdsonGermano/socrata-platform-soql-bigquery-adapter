@@ -20,5 +20,5 @@ class VersionRep extends BBQRep[SoQLType, SoQLValue] {
     else JString(value.asInstanceOf[SoQLVersion].value.toString)
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

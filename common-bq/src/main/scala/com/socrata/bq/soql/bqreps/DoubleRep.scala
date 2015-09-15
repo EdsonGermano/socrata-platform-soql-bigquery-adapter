@@ -24,5 +24,5 @@ class DoubleRep extends BBQRep[SoQLType, SoQLValue] {
     }
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

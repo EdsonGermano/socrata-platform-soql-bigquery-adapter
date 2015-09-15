@@ -14,5 +14,5 @@ class NullRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def jvalue(value: SoQLValue): JValue = JNull
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }
