@@ -10,9 +10,9 @@ class VersionRep extends BBQRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "INTEGER"
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
+  override def SoQL(cols: Seq[String]): SoQLValue = {
     // should never be null
-    SoQLVersion(row.head.toLong)
+    SoQLVersion(cols.head.toLong)
   }
 
   override def jvalue(value: SoQLValue): JValue = {

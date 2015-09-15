@@ -11,9 +11,9 @@ class DateRep extends BBQRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "TIMESTAMP"
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
-    if (row.head == null) SoQLNull
-    else SoQLDate(new LocalDate(row.head.toDouble.toLong))
+  override def SoQL(cols: Seq[String]): SoQLValue = {
+    if (cols.head == null) SoQLNull
+    else SoQLDate(new LocalDate(cols.head.toDouble.toLong))
   }
 
   override def jvalue(value: SoQLValue): JValue = ???

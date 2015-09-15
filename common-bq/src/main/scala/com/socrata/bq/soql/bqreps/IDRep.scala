@@ -10,9 +10,9 @@ class IDRep extends BBQRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "INTEGER"
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
+  override def SoQL(cols: Seq[String]): SoQLValue = {
     // should not be null
-    SoQLID(row.head.toLong)
+    SoQLID(cols.head.toLong)
   }
 
   override def jvalue(value: SoQLValue): JValue = {

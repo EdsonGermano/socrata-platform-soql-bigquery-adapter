@@ -11,13 +11,13 @@ class FixedTimestampRep extends BBQRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "TIMESTAMP"
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
-    if (row.head == null)
+  override def SoQL(cols: Seq[String]): SoQLValue = {
+    if (cols.head == null)
       SoQLNull
     else
       // Timestamp strings can be returned from BQ as either plain numbers or scientific notation,
       // so we need the additional toDouble conversion to avoid NumberFormatExceptions
-      SoQLFixedTimestamp(new DateTime(row.head.toDouble.toLong, DateTimeZone.UTC))
+      SoQLFixedTimestamp(new DateTime(cols.head.toDouble.toLong, DateTimeZone.UTC))
   }
 
   override def jvalue(value: SoQLValue): JValue = {

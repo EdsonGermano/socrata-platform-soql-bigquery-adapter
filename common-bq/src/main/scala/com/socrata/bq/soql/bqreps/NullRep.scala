@@ -10,7 +10,7 @@ class NullRep extends BBQRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "STRING"
 
-  override def SoQL(row: Seq[String]): SoQLValue = SoQLNull
+  override def SoQL(cols: Seq[String]): SoQLValue = SoQLNull
 
   override def jvalue(value: SoQLValue): JValue = JNull
 

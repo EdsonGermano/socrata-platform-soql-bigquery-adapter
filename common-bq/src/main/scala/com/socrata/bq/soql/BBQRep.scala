@@ -11,7 +11,7 @@ trait BBQReadRep[Type, Value] extends BBQRepBase[Type] {
   /**
    * Converts a sequence of columns in BigQuery to a value. Expects the length of the sequence to be `numColumns`
    */
-  def SoQL(row: Seq[String]) : Value
+  def SoQL(cols: Seq[String]) : Value
 
   /**
    * The number of columns in BigQuery to read

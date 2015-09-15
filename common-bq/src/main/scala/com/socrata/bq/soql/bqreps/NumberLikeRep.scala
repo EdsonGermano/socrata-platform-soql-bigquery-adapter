@@ -12,9 +12,9 @@ class NumberLikeRep(encode: java.math.BigDecimal => SoQLValue,
 
   override val bigqueryType: String = "FLOAT"
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
-    if (row.head == null) SoQLNull
-    else encode(new java.math.BigDecimal(row.head))
+  override def SoQL(cols: Seq[String]): SoQLValue = {
+    if (cols.head == null) SoQLNull
+    else encode(new java.math.BigDecimal(cols.head))
   }
 
   override def jvalue(value: SoQLValue): JValue = {

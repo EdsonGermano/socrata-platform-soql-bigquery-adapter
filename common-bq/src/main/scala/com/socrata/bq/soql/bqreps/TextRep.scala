@@ -12,9 +12,9 @@ class TextRep extends BBQRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "STRING"
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
-    if (row.head == null) SoQLNull
-    else SoQLText(row.head)
+  override def SoQL(cols: Seq[String]): SoQLValue = {
+    if (cols.head == null) SoQLNull
+    else SoQLText(cols.head)
   }
 
   override def jvalue(value: SoQLValue): JValue = {
