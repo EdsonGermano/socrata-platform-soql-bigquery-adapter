@@ -17,13 +17,12 @@ class PointRep extends BBQRep[SoQLType, SoQLValue] {
   override val bigqueryType: String = "RECORD"
 
   override def SoQL(row: Seq[String]): SoQLValue = {
-    // GeoJSON format is (long, lat)
+    // Points are written to BigQuery as (lat, long), so reverse the order after
+    // reading the data returned to match the GeoJSON format of (long, lat).
     val y = row(0)
     val x = row(1)
     if (x == null || y == null) SoQLNull
-    else {
-      SoQLPoint(geomFactory.createPoint(new Coordinate(x.toDouble, y.toDouble)))
-    }
+    else SoQLPoint(geomFactory.createPoint(new Coordinate(x.toDouble, y.toDouble)))
   }
 
   override def bigqueryFieldSchema() = {
@@ -40,6 +39,8 @@ class PointRep extends BBQRep[SoQLType, SoQLValue] {
   }
 
   override def jvalue(value: SoQLValue): JValue = {
+    // The SoQLValue is broken down into its latitude and longitude components, which are stored in separate
+    // columns in BigQuery
     if (value == SoQLNull) JObject(Map(
       "lat" -> JNull,
       "long" -> JNull

@@ -16,6 +16,7 @@ class MultiPolygonRep extends BBQRep[SoQLType, SoQLValue] {
 
   override val bigqueryType: String = "STRING"
 
+  // Values sent to and stored in BigQuery as well-known binary
   override def jvalue(value: SoQLValue): JValue = {
     val bytes = wkbWriter.write(value.asInstanceOf[SoQLMultiPolygon].value)
     JString(printBase64Binary(bytes))
@@ -29,12 +30,18 @@ class MultiPolygonRep extends BBQRep[SoQLType, SoQLValue] {
 }
 
 object MultiPolygonRep {
+
+  /**
+   * A special case of the MultiPolygonRep for converting "extent" (aka bounding box) queries, which operate
+   * on points and return a multiPolygon
+   */
   class BoundingBoxRep extends BBQReadRep[SoQLType, SoQLValue] {
 
     private val geomFactory = new GeometryFactory()
 
     override def repType: SoQLType = SoQLMultiPolygon
 
+    // Expects a series of points: [(minLat, minLong), (maxLat, maxLong)]
     override def SoQL(row: Seq[String]): SoQLValue = {
       if (row(0) == null || row(1) == null || row(2) == null || row(3) == null) SoQLNull
       else {
