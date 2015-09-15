@@ -25,7 +25,7 @@ class BBQQuerier(projectId: String) {
   private val BATCH : Boolean = false
 
   // BigQuery client
-  private val BIG_QUERY = {
+  private val BIGQUERY = {
     var credential: GoogleCredential = GoogleCredential.getApplicationDefault
     if (credential.createScopedRequired) {
       credential = credential.createScoped(BigqueryScopes.all)
@@ -42,10 +42,10 @@ class BBQQuerier(projectId: String) {
    */
   @throws(classOf[Exception])
   def query(queryString: String): Iterator[GetQueryResultsResponse] = {
-    val query: Job = asyncQuery(BIG_QUERY, projectId, queryString)
-    val getRequest: Bigquery#Jobs#Get = BIG_QUERY.jobs.get(projectId, query.getJobReference.getJobId)
+    val query: Job = asyncQuery(BIGQUERY, projectId, queryString)
+    val getRequest: Bigquery#Jobs#Get = BIGQUERY.jobs.get(projectId, query.getJobReference.getJobId)
     pollJob(getRequest, WAIT_TIME_BEFORE_POLLING)
-    val resultsRequest: Bigquery#Jobs#GetQueryResults = BIG_QUERY.jobs.getQueryResults(projectId, query.getJobReference.getJobId)
+    val resultsRequest: Bigquery#Jobs#GetQueryResults = BIGQUERY.jobs.getQueryResults(projectId, query.getJobReference.getJobId)
     getPages(resultsRequest)
   }
 
