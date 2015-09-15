@@ -103,7 +103,5 @@ object EmptyIt extends CloseableIterator[Nothing] with RowCount {
 }
 
 trait RowCount {
-
   def rowCount: Option[Long]
-
 }
