@@ -1,7 +1,7 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JString, JValue}
-import com.socrata.bq.soql.{BBQReadRep, BBQRep}
+import com.socrata.bq.soql.{BigqueryType, BBQReadRep, BBQRep}
 import com.socrata.soql.types._
 import com.vividsolutions.jts.geom.{MultiPolygon, Coordinate, GeometryFactory}
 import com.vividsolutions.jts.io.{WKBReader, WKBWriter}
@@ -14,7 +14,7 @@ class MultiPolygonRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLMultiPolygon
 
-  override val bigqueryType: String = "STRING"
+  override val bigqueryType = BigqueryType.String
 
   // Values sent to and stored in BigQuery as well-known binary
   override def jvalue(value: SoQLValue): JValue = {
