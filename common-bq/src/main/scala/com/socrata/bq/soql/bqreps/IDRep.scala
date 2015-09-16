@@ -1,18 +1,18 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JString, JNull, JValue}
-import com.socrata.bq.soql.BBQRep
+import com.socrata.bq.soql.{BigqueryType, BBQRep}
 import com.socrata.soql.types.{SoQLID, SoQLValue, SoQLType}
 
 class IDRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLID
 
-  override val bigqueryType: String = "INTEGER"
+  override val bigqueryType = BigqueryType.Integer
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
+  override def SoQL(cols: Seq[String]): SoQLValue = {
     // should not be null
-    SoQLID(row.head.toLong)
+    SoQLID(cols.head.toLong)
   }
 
   override def jvalue(value: SoQLValue): JValue = {
@@ -20,5 +20,5 @@ class IDRep extends BBQRep[SoQLType, SoQLValue] {
     else JString(value.asInstanceOf[SoQLID].value.toString)
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }
