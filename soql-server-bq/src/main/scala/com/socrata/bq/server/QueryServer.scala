@@ -170,7 +170,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
             ETag(etag)(resp)
             copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
             for (r <- results) yield {
-              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, dataVersion, lastModified)(resp)
+              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, dataVersion, lastModified, cinfo.locale)(resp)
             }
           case NotModified(etags) =>
             notModified(etags)(resp)
