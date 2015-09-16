@@ -1,7 +1,7 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast._
-import com.socrata.bq.soql.BBQRep
+import com.socrata.bq.soql.{BigqueryType, BBQRep}
 import com.socrata.soql.types.{SoQLNull, SoQLNumber, SoQLValue, SoQLType}
 
 class NumberLikeRep(encode: java.math.BigDecimal => SoQLValue,
@@ -10,7 +10,7 @@ class NumberLikeRep(encode: java.math.BigDecimal => SoQLValue,
 
   override def repType: SoQLType = SoQLNumber
 
-  override val bigqueryType: String = "FLOAT"
+  override val bigqueryType = BigqueryType.Float
 
   override def SoQL(cols: Seq[String]): SoQLValue = {
     if (cols.head == null) SoQLNull
