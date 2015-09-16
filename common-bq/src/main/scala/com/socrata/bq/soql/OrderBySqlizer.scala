@@ -2,11 +2,7 @@ package com.socrata.bq.soql
 
 import com.socrata.soql.typed.OrderBy
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.soql.types.{SoQLValue, SoQLType}
-import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
-import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
-
+import com.socrata.soql.types.SoQLType
 
 class OrderBySqlizer(orderBy: OrderBy[UserColumnId, SoQLType]) extends Sqlizer[OrderBy[UserColumnId, SoQLType]] {
 
@@ -20,4 +16,3 @@ class OrderBySqlizer(orderBy: OrderBy[UserColumnId, SoQLType]) extends Sqlizer[O
     BQSql(se, setParamsOrderBy)
   }
 }
-

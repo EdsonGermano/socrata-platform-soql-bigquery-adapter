@@ -2,7 +2,6 @@ package com.socrata.bq.server
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
-import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
 import com.socrata.bq.store.BBQCommon
@@ -171,7 +170,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
             ETag(etag)(resp)
             copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
             for (r <- results) yield {
-              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, dataVersion, lastModified)(resp)
+              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, dataVersion, lastModified, cinfo.locale)(resp)
             }
           case NotModified(etags) =>
             notModified(etags)(resp)

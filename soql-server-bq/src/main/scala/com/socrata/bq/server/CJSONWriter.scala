@@ -7,11 +7,9 @@ import com.rojoma.simplearm.util._
 import com.socrata.bq.query.RowCount
 import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, ColumnInfo}
+import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.bq.store.{BBQColumnInfo, PostgresUniverseCommon}
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.typesafe.scalalogging.slf4j.Logger
@@ -52,7 +50,7 @@ object CJSONWriter {
                  rows: CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]] with RowCount,
                  dataVersion: Long,
                  lastModified: DateTime,
-                 locale: String = "en_US") = (r: HttpServletResponse) => {
+                 locale: String) = (r: HttpServletResponse) => {
 
     r.setContentType("application/json")
     r.setCharacterEncoding(utf8EncodingName)
@@ -61,7 +59,7 @@ object CJSONWriter {
     val cp = new CryptProvider(obfuscationKey.get)
     val jsonReps = SoQLRep.jsonRep(new SoQLID.StringRep(cp), new SoQLVersion.StringRep(cp))
 
-    // Grab the first row in order to get the RowCount (only accessible after beginning to iterate over
+    // Grab the first row in order to get the row count (only accessible after beginning to iterate over
     // the BQ results)
     val firstRow = rows.hasNext match {
       case true => Some(rows.next())
@@ -85,7 +83,7 @@ object CJSONWriter {
       val reps = cjsonSortedSchema.map { bbqColInfo => jsonReps(bbqColInfo.typ) }.toArray
       val cids = cjsonSortedSchema.map { bbqColInfo => qryColumnIdToUserColumnIdMap(bbqColInfo.userColumnId) }.toArray
 
-      // Write row count, schema, data-version, etc. to the JSON
+      // Write row count, schema, data_version, last_modified, and locale to the JSON
       CompactJsonWriter.toWriter(writer, JObject(Map(
         "approximate_row_count" -> JNumber(rowCount.get),
         "data_version" -> JNumber(dataVersion),

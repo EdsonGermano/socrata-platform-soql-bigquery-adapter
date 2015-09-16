@@ -1,7 +1,7 @@
 package com.socrata.bq.soql
 
 import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
-import javax.xml.bind.DatatypeConverter.{parseBase64Binary, printBase64Binary}
+import javax.xml.bind.DatatypeConverter.printBase64Binary
 import com.socrata.soql.types._
 import com.vividsolutions.jts.geom.{Coordinate, GeometryFactory}
 import com.vividsolutions.jts.io.{WKBReader, WKBWriter}

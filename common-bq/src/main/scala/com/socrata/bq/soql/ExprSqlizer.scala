@@ -3,8 +3,6 @@ package com.socrata.bq.soql
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import java.sql.PreparedStatement
 import Sqlizer._
 import SqlizerContext._
 

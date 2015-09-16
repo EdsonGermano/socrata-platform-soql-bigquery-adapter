@@ -1,14 +1,11 @@
 package com.socrata.bq.soql
 
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.functions._
 import com.socrata.soql.types._
 import com.socrata.soql.typed.{CoreExpr, NumberLiteral, StringLiteral, FunctionCall}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
-import scala.util.parsing.input.NoPosition
-import com.socrata.soql.ast.SpecialFunctions
 
 object SqlFunctions {
 
@@ -127,16 +124,6 @@ object SqlFunctions {
     CountStar -> formatCall("count(*)") _
     // TODO: Complete the function list.
   ) ++ castIdentities.map(castIdentity => Tuple2(castIdentity, passthrough))
-
-  private val Wildcard = StringLiteral("%", SoQLText)(NoPosition)
-
-  private val SuffixWildcard = {
-    val bindings = SoQLFunctions.Concat.parameters.map {
-      case VariableType(name) =>  (name -> SoQLText)
-      case _ => throw new Exception("Unexpected concat function signature")
-    }.toMap
-    MonomorphicFunction(SoQLFunctions.Concat, bindings)
-  }
 
   private def passthrough: FunCallToSql = formatCall("%s")
 

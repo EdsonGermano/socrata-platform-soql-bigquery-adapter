@@ -1,7 +1,6 @@
 package com.socrata.bq.soql
 
-import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
@@ -42,10 +41,6 @@ trait Sqlizer[T] {
         case _ => false
       }
     else false
-  }
-
-  protected def appendWildCard(ctx: Context) : Boolean = {
-    false
   }
 
   protected def usedInGroupBy(ctx: Context): Boolean = {
@@ -104,8 +99,6 @@ object Sqlizer {
   implicit def analysisSqlizer(analysisTable: Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]) = {
     new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2)
   }
-
-
 }
 
 object SqlizerContext extends Enumeration {
