@@ -21,27 +21,21 @@ import org.postgresql.ds.PGSimpleDataSource
 
 class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
 
-  logger.info(s"config: ${config.toString}")
-
   val storeConfig = new BBQStoreConfig(config, "")
-
-  private val TRANSPORT = new NetHttpTransport()
-  private val JSON_FACTORY = new JacksonFactory()
-  logger.debug(s"Using project ${storeConfig.projectId} with dataset ${storeConfig.datasetId}")
 
   private val bigquery = {
     var credential: GoogleCredential = GoogleCredential.getApplicationDefault
     if (credential.createScopedRequired) {
       credential = credential.createScoped(BigqueryScopes.all)
     }
-    new Bigquery.Builder(TRANSPORT, JSON_FACTORY, credential).setApplicationName("BBQ Secondary").build()
+    new Bigquery.Builder(new NetHttpTransport(), new JacksonFactory(), credential).setApplicationName("BBQ Secondary").build()
   }
 
   private val dsInfo = dataSourceFromConfig(storeConfig.database)
-
   private val bigqueryUtils = new BBQCommon(dsInfo, storeConfig.projectId)
-
   private val resyncHandler = new BBQResyncHandler(storeConfig.resyncConfig, bigquery, storeConfig.projectId, storeConfig.datasetId)
+
+  logger.info(s"Using project ${storeConfig.projectId} with dataset ${storeConfig.datasetId}")
 
   // called on graceful shutdown
   override def shutdown(): Unit = {
