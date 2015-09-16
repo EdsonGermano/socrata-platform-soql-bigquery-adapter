@@ -9,7 +9,7 @@ import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 
 case class BQSql(sql: String, setParams: Seq[String]) {
 
-  // This is disgusting
+  // This is a little awful but... we are working with a String built up from other Strings, not ParametricSql
   def injectParams: String = {
     var i = -1
     val result = new StringBuilder()
