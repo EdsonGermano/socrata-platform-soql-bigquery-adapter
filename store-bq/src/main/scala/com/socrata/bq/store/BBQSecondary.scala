@@ -25,8 +25,6 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
 
   val storeConfig = new BBQStoreConfig(config, "")
 
-  private val TRANSPORT = new NetHttpTransport()
-  private val JSON_FACTORY = new JacksonFactory()
   logger.debug(s"Using project ${storeConfig.projectId} with dataset ${storeConfig.datasetId}")
 
   private val bigquery = {
@@ -34,7 +32,7 @@ class BBQSecondary(config: Config) extends Secondary[SoQLType, SoQLValue] with L
     if (credential.createScopedRequired) {
       credential = credential.createScoped(BigqueryScopes.all)
     }
-    new Bigquery.Builder(TRANSPORT, JSON_FACTORY, credential).setApplicationName("BBQ Secondary").build()
+    new Bigquery.Builder(new NetHttpTransport(), new JacksonFactory(), credential).setApplicationName("BBQ Secondary").build()
   }
 
   private val dsInfo = dataSourceFromConfig(storeConfig.database)
