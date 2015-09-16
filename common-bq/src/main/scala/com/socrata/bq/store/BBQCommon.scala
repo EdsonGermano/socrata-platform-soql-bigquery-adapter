@@ -22,17 +22,21 @@ case class BBQColumnInfo(userColumnId: UserColumnId, soqlTypeName: String) {
   val typ = SoQLType.typesByName(new TypeName(soqlTypeName))
 }
 
-/** BBQDatasetInfo corresponds to a row in the copy info table. */
+/**
+ * A BBQDatasetInfo corresponds to a row in the copy info table
+ */
 case class BBQDatasetInfo(datasetId: Long, copyNumber: Long, dataVersion: Long, lastModified: DateTime, locale: String, obfuscationKey: Array[Byte])
 
 object BBQCommon extends BBQCommonBase
 
-/** The BBQCommon class includes methods for accessing the copy info table
-  * It is instantiated with a project id for brevity in makeTableReference.
-  */
+/**
+ * BBQCommon includes methods for accessing metadata for the Bigquery service
+ * It is instantiated with a project id for brevity in makeTableReference
+ */
 class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BBQCommonBase {
   private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
+  private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
 
   // Ensure tables exist.
   for (conn <- managed(getConnection)) {
@@ -61,12 +65,16 @@ class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BBQCommonBase {
     """.stripMargin.trim)
   }
 
+  /**
+    * Creates a reference to a table in bigquery
+   */
   def makeTableReference(bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: CopyInfo) =
-    super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
+  super.makeTableReference(bqProjectId, bqDatasetId, datasetInfo, copyInfo)
 
-  private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
 
-  /** Looks up metadata for a dataset and returns a BBQDatasetInfo object */
+  /**
+   * Looks up metadata for a dataset and returns a BBQDatasetInfo object
+   */
   private def getMetadataEntry(datasetId: Long): Option[BBQDatasetInfo] = {
     for (conn <- managed(getConnection)) {
       val query = s"SELECT copy_number, data_version, locale, last_modified, obfuscation_key FROM $copyInfoTable WHERE dataset_id=?;"
@@ -86,19 +94,21 @@ class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BBQCommonBase {
     None
   }
 
-  /** Looks up metadata for a dataset and returns a BBQDatasetInfo object. */
+  /**
+   * Retrieves a BBQDatasetInfo object containing metadata for a dataset
+   */
   def getMetadataEntry(datasetInfo: DatasetInfo): Option[BBQDatasetInfo] =
     getMetadataEntry(parseDatasetId(datasetInfo.internalName))
 
-  /** Looks up metadata for a dataset and returns a BBQDatasetInfo object. */
   def getMetadataEntry(datasetId: DatasetId): Option[BBQDatasetInfo] =
     getMetadataEntry(datasetId.underlying)
 
-  /** Looks up metadata for a dataset and returns a BBQDatasetInfo object. */
   def getMetadataEntry(datasetInternalName: String): Option[BBQDatasetInfo] =
     getMetadataEntry(parseDatasetId(datasetInternalName))
 
-  /** Writes metadata for a dataset to the copy info table. */
+  /**
+   * Writes metadata for a dataset to the copy info table.
+   */
   def setMetadataEntry(datasetInfo: DatasetInfo, copyInfo: CopyInfo) = {
     val id = parseDatasetId(datasetInfo.internalName)
     val (copyNumber, version, lastModified) = (copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified)
@@ -125,7 +135,9 @@ class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BBQCommonBase {
     }
   }
 
-  /** Writes schema info for a dataset to the column map table */
+  /**
+   * Writes schema info for a dataset to the column map table
+   */
   def setSchema(datasetId: Long, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {
     for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
@@ -157,20 +169,19 @@ class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BBQCommonBase {
     }
   }
 
-  /** Writes schema info for a dataset to the column map table */
   def setSchema(datasetInfo: DatasetInfo, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit =
     setSchema(parseDatasetId(datasetInfo.internalName), schema)
 
-  /** Writes schema info for a dataset to the column map table */
   def setSchema(datasetInternalName: String, schema: ColumnIdMap[ColumnInfo[SoQLType]]): Unit =
     setSchema(parseDatasetId(datasetInternalName), schema)
 
-  /** Looks up schema info for a dataset */
+  /**
+   * Retrieves the schema for a dataset
+   */
   def getSchema(datasetInternalName: String): Option[Schema] = {
     getSchema(parseDatasetId(datasetInternalName))
   }
 
-  /** Looks up schema info for a dataset */
   def getSchema(datasetId: Long): Option[Schema] = {
     for (conn <- managed(getConnection)) {
       val stmt = conn.createStatement()
@@ -259,29 +270,43 @@ class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BBQCommonBase {
     None
   }
 
+  /**
+   * A connection to the Postgres database that stores metadata
+   */
   private def getConnection = dsInfo.dataSource.getConnection
 }
 
+/**
+ * Utility methods for creating columns and tables, and loading data in bigquery
+ */
 protected trait BBQCommonBase extends Logging {
 
-  /** Converts a dataset internal name like "primus.1" to a dataset id */
+  /**
+   * Extracts a dataset id from a dataset internal name like "primus.1"
+   */
   def parseDatasetId(datasetInternalName: String): Long = {
     datasetInternalName.split('.')(1).toLong
   }
 
-  /** Converts a dataset internal name to a copy-unique table name for bigquery */
+  /**
+   * Converts a dataset internal name to a copy-unique table name for bigquery
+   */
   def makeTableName(datasetInternalName: String, copyNumber: Long): String = {
     datasetInternalName.replace('.', '_') + "_" + copyNumber
   }
 
-  // The string identifier for a dataset/table combination used in query strings
-  // e.g. SELECT * FROM [datasetId.tableName] ...
+  /**
+   * The string identifier for a dataset/table combination used in query strings
+   * e.g. SELECT * FROM [datasetId.tableName] ...
+   */
   def makeFullTableIdentifier(datasetId: String, datasetInternalName: String, copyNumber: Long): String = {
     val tableName = makeTableName(datasetInternalName, copyNumber)
     s"[$datasetId.$tableName]"
   }
 
-  /** Constructs a bigquery TableReference object referring to the bigquery table for the specified copy. */
+  /**
+   * Constructs a bigquery TableReference object referring to the bigquery table for the specified copy
+   */
   def makeTableReference(bqProjectId: String, bqDatasetId: String, datasetInfo: DatasetInfo, copyInfo: CopyInfo) = {
     new TableReference()
         .setProjectId(bqProjectId)
@@ -289,7 +314,9 @@ protected trait BBQCommonBase extends Logging {
         .setTableId(makeTableName(datasetInfo.internalName, copyInfo.copyNumber))
   }
 
-  /** Converts a set of truth column information to a bigquery column identifier. */
+  /**
+   * Converts a set of truth column information to a bigquery column identifier
+   */
   def makeColumnName(columnId: ColumnId, userColumnId: UserColumnId): String = {
     if (userColumnId.underlying.charAt(0) == ':') {
       // here we expect userColumnId.underlying to be like `:snake_case_identifier`
@@ -302,12 +329,16 @@ protected trait BBQCommonBase extends Logging {
     }
   }
 
-  /** Converts a schema map to a name map, applying makeColumnName to each column */
+  /**
+   * Converts a schema map to a name map, applying makeColumnName to each column
+   */
   def makeColumnNameMap(soqlSchema: ColumnIdMap[ColumnInfo[SoQLType]]): ColumnIdMap[String] = {
     soqlSchema.transform( (id, info) => makeColumnName(id, info.id) )
   }
 
-  /** Constructs a bigquery TableSchema from a schema map and a corresponding column name map. */
+  /**
+   * Constructs a bigquery TableSchema from a schema map and a corresponding column name map
+   */
   def makeTableSchema(schema: ColumnIdMap[ColumnInfo[SoQLType]],
                       columnNameMap: ColumnIdMap[String]): TableSchema = {
     // map over the values of schema, converting to bigquery TableFieldSchema
@@ -319,7 +350,9 @@ protected trait BBQCommonBase extends Logging {
     new TableSchema().setFields(fields)
   }
 
-  /** Constructs a bigquery load job referencing the spcified table */
+  /**
+   * Constructs a bigquery load job referencing the specified table
+   */
   def makeLoadJob(ref: TableReference, truncate: Boolean = false) = {
     val config = new JobConfigurationLoad()
             .setDestinationTable(ref)
