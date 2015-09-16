@@ -36,7 +36,8 @@ object BBQCommon extends BBQCommonBase
 class BBQCommon(dsInfo: DSInfo, bqProjectId: String) extends BBQCommonBase {
   private val copyInfoTable = "bbq_copy_info"
   private val columnMapTable = "bbq_column_map"
-  private val schemaHasher = new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache)
+  private val schemaHasher =
+    new BBQSchemaHasher[SoQLType, Nothing](SoQLTypeContext.typeNamespace.userTypeForType, NullCache) // TODO: Use a real cache
 
   // Ensure tables exist.
   for (conn <- managed(getConnection)) {

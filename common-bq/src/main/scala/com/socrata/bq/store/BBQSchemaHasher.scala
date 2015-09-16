@@ -12,7 +12,15 @@ import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.util.Cache
 import com.socrata.soql.environment.TypeName
 
-// Hashing logic reused from com.socrata.datacoordinator.service.SchemaFinder
+/**
+ * Utility for computing a hash for a table schema
+ * NOTE: Should match up with the hashing algorithm used by the Soql Postgres Adapter
+ *
+ * @param typeSerializer grabs the name for the parametrized type
+ * @param cache should store already-computed hashes for future requests
+ * @tparam CT
+ * @tparam CV
+ */
 class BBQSchemaHasher[CT, CV](typeSerializer: CT => TypeName, cache: Cache) {
 
   def schemaHash(datasetId: Long,
@@ -24,8 +32,6 @@ class BBQSchemaHasher[CT, CV](typeSerializer: CT => TypeName, cache: Cache) {
     val key = List("schemahash", datasetId.toString, dataVersion.toString)
     cache.lookup[String](key) match {
       case Some(result) =>
-        val result = SchemaHash.computeHash(pk, schema, locale, typeSerializer)
-        cache.cache(key, result, 24.hours)
         result
       case None =>
         val result = SchemaHash.computeHash(pk, schema, locale, typeSerializer)
@@ -50,16 +56,14 @@ object SchemaHash extends Logging {
     new String(cs)
   }
 
+  // Hashing logic reused from com.socrata.datacoordinator.service.SchemaFinder. Signature changed because we don't
+  // have access to ColumnInfo and DatasetCopyContext like PGU does.
   def computeHash[CT](pk: UserColumnId, schema: Seq[(UserColumnId, CT)], locale: String, typeSerializer: CT => TypeName): String = {
     val cols = schema.toArray
     val sha1 = MessageDigest.getInstance("SHA-1")
 
     sha1.update(locale.getBytes(UTF_8))
     sha1.update(255.toByte)
-
-//    val pk = cols.find(_.isUserPrimaryKey).orElse(cols.find(_.isSystemPrimaryKey)).getOrElse {
-//      sys.error("No primary key defined on dataset?")
-//    }
     sha1.update(pk.underlying.getBytes(UTF_8))
     sha1.update(255.toByte)
 
