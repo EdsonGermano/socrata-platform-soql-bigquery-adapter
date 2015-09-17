@@ -9,17 +9,17 @@ The Bigquery Adapter for SODAServer includes:
 
 You can access the Google Bigquery console for a particular table at [https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name](https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name).
 
-There are three levels of organization within Bigquery: projects, datasets, and tables. Bigquery projects contain any number of datasets. Each dataset can have any number of tables, which actually contain data. NOTE: Your project id is not necessarily the same as your project's name.
+There are three levels of organization within Bigquery: projects, datasets, and tables. Bigquery projects contain datasets, each of which contain tables, which actually store data. In the image below, `alpha_49088_1` is a table, `socrata_staging` is a dataset, and `socrata-data` is a project. NOTE: Your project id is not necessarily the same as your project's name. In the image below, `thematic-bee-98521` is the project id.
 
 !["Bigquery project structure"](/images/project-hierarchy.png "")
 
-The Bigquery console allows you to issue queries against your tables:
+Bigquery uses a SQL-like language that supports most SQL clauses and has a [variety of useful functions](https://cloud.google.com/bigquery/query-reference). The **soql-server-bq** supports most basic SoQL operations, including the majority of queries used on Data Lens pages. However, there is limited support for geo-spatial functions. You can issue queries against your tables using the Bigquery console.
 
 !["Query"](/images/query.png "")
 
-Whether you are uploading data using the **secondary-watcher-bq**, or through Google Bigquery's frontend interface, it may take several minutes for data to actually appear in your tables after the load jobs have completed.
-
 The **secondary-watcher-bq** uses load jobs, not streaming inserts, to put data in Bigquery. You can read about load job quotas [here](https://cloud.google.com/bigquery/quota-policy#import).
+
+Whether you are uploading data using the **secondary-watcher-bq** plugin, or through Google Bigquery's frontend interface, be aware that it may take several minutes for data to actually appear in your tables after the load jobs have completed.
 
 ## Build Requirements
 sbt
