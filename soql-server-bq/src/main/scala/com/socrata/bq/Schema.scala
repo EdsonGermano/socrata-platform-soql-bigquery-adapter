@@ -1,7 +1,7 @@
 package com.socrata.bq
 
 import com.rojoma.json.v3.codec.JsonDecode.DecodeResult
-import com.rojoma.json.v3.codec.{DecodeError, JsonDecode, JsonEncode}
+import com.rojoma.json.v3.codec.{JsonDecode, JsonEncode}
 import com.rojoma.json.v3.matcher.{PObject, Variable}
 import com.rojoma.json.v3.ast.{JValue, JString, JObject}
 import com.socrata.datacoordinator.id.UserColumnId

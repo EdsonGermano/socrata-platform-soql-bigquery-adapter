@@ -1,74 +1,51 @@
 package com.socrata.bq.soql
 
-
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.bq.store.PostgresUniverseCommon
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
-import com.socrata.soql.typed.{StringLiteral, OrderBy, CoreExpr}
-import scala.util.parsing.input.NoPosition
+import com.socrata.soql.typed.{OrderBy, CoreExpr}
 
-
+/**
+ * Converts SoQLAnalysis and a table name into a complete BigQuery SQL.
+ * @param analysis The analysis containing information about what to store in each of the clauses of the SQL statement.
+ * @param tableName The BigQuery table name that the statement should query.
+ */
 class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableName: String)
-      extends Sqlizer[Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]] {
+      extends Sqlizer[(SoQLAnalysis[UserColumnId, SoQLType], String)] {
 
   import Sqlizer._
   import SqlizerContext._
 
   val underlying = Tuple2(analysis, tableName)
-  val convToUnderScore = "[)./+\\-?(*<> ]"
+  val convToUnderScore = "[)./+\\-?(*<> ]"  // Set of chars that need to be replaced by an underscore
   var aliasMap = scala.collection.mutable.Map[String, String]() // Mapping from expressions that need to be aliased to their aliases
 
-  override def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
-    sql(physicalColumnMapping, false, setParams, ctx, escape)
-  }
-
   /**
-   * For rowcount w/o group by, just replace the select with count(*).
-   * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t1
+   * Combines information from the analysis, column mapping from user column ids to physical columns, and the context
+   * to construct a coherent SQL String without parameters and a sequence of parameters to be inserted into the SQL string.
+   * @param physicalColumnMapping The mapping from each UserColumnId to a physical column present in the BQ table.
+   * @param setParams An empty sequence.
+   * @param context A map that contains meta-data about how the SQL string is to be constructed.
+   * @param escape A function that escapes illegal characters as specified by BigQuery.
+   * @return A BQSql(sql, params) where sql is the incomplete SQL string with "?" as placeholders
+   *         for each element in params.
    */
-  def rowCountSql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], ctx: Context, escape: Escape) = {
-    sql(physicalColumnMapping, true, setParams, ctx, escape)
-  }
-
-  private def sql(physicalColumnMapping: Map[UserColumnId, String],
-                  reqRowCount: Boolean,
-                  setParams: Seq[String],
-                  context: Context,
-                  escape: Escape) = {
-
-    val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
+  override def sql(physicalColumnMapping: Map[UserColumnId, String], setParams: Seq[String], context: Context, escape: Escape) = {
     val ctx = context + (Analysis -> analysis)
+
+    // Construct a SQL statement using the clauses found in the SoQL Analysis. The appropriate function calls are
+    // applied to match BigQuery's SQL-like language.
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
-    val (selectPhrase, setParamsSelect) =
-      if (reqRowCount && analysis.groupBy.isEmpty) (funcAlias(Seq("count(*)")), setParams)
-      else select(physicalColumnMapping, setParams, ctxSelect, escape)
+    val (selectPhrase, setParamsSelect) = select(physicalColumnMapping, setParams, ctxSelect, escape)
 
     // WHERE
-    val where = ana.where.map(_.sql(physicalColumnMapping, setParamsSelect, ctx + (SoqlPart -> SoqlWhere), escape))
+    val where = analysis.where.map(_.sql(physicalColumnMapping, setParamsSelect, ctx + (SoqlPart -> SoqlWhere), escape))
     val setParamsWhere = where.map(_.setParams).getOrElse(setParamsSelect)
 
-    // SEARCH
-//    val search = ana.search.map { search =>
-//      val searchLit = StringLiteral(search, SoQLText)(NoPosition)
-//      val BQSql(searchSql, searchSetParams) = searchLit.sql(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
-//
-//      PostgresUniverseCommon.searchVector(allColumnReps) match {
-//        case Some(sv) =>
-//          val andOrWhere = if (where.isDefined) " AND" else " WHERE"
-//          val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
-//          BQSql(fts, searchSetParams)
-//        case None =>
-//          BQSql("", setParamsWhere)
-//      }
-//    }
-//    val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
-
     // GROUP BY
-    val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
+    val groupBy = analysis.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsWhere)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
       val BQSql(sql, newSetParams) = gb.sql(physicalColumnMapping, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
       val soqlType = gb.typ
@@ -85,11 +62,11 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsWhere)
 
     // HAVING
-    val having = ana.having.map(_.sql(physicalColumnMapping, setParamsGroupBy, ctx + (SoqlPart -> SoqlHaving), escape))
+    val having = analysis.having.map(_.sql(physicalColumnMapping, setParamsGroupBy, ctx + (SoqlPart -> SoqlHaving), escape))
     val setParamsHaving = having.map(_.setParams).getOrElse(setParamsGroupBy)
 
     // ORDER BY
-    val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
+    val orderBy = analysis.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val BQSql(sql, newSetParams) =
           ob.sql(physicalColumnMapping, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
@@ -106,21 +83,25 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val completeSql = selectPhrase.mkString("SELECT ", ",", "") +
       s" FROM $tableName" +
       where.map(" WHERE " +  _.sql).getOrElse("") +
-//      search.map(_.sql).getOrElse("") +
       groupBy.map(_._1.mkString(" GROUP BY ", ",", "")).getOrElse("") +
       having.map(" HAVING " +  _.sql).getOrElse("") +
       orderBy.map(_._1.mkString(" ORDER BY ", ",", "")).getOrElse("") +
-      ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
-      ana.offset.map(" OFFSET " + _.toString).getOrElse("")
+      analysis.limit.map(" LIMIT " + _.toString).getOrElse("") +
+      analysis.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    BQSql(countBySubQuery(reqRowCount, completeSql), setParamsOrderBy)
+    BQSql(completeSql, setParamsOrderBy)
   }
 
-  private def countBySubQuery(reqRowCount: Boolean, sql: String) = {
-    if (reqRowCount && analysis.groupBy.isDefined) s"SELECT count(*) FROM ($sql) t1"
-    else sql
-  }
-
+  /**
+   * Constructs the full select statement.
+   *
+   * @param physicalColumnMapping The mapping from each UserColumnId to the physical column name present in the BQ table.
+   * @param setParams The current sequence of parameters to be injected into the SQL string.
+   * @param ctx A map that contains meta-data about how the SQL string is to be constructed.
+   * @param escape A function that escapes illegal characters as specified by BigQuery.
+   * @return A BQSql(sql, params) where sql is the complete aliased select statement and params represents the params
+   *         to be inserted into the select statement.
+   */
   private def select(physicalColumnMapping: Map[UserColumnId, String],
                      setParams: Seq[String],
                      ctx: Context,
@@ -130,43 +111,42 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       val BQSql(sql, newSetParams) = coreExpr.sql(physicalColumnMapping, t2._2, ctx + (RootExpr -> coreExpr), escape)
       val soqlType = coreExpr.typ
 
-      // the query wants to extract the day, year, or month from the timestamp.
       val conversion = soqlType match {
-        case SoQLFixedTimestamp
+        case SoQLFixedTimestamp   // need to wrap timestamp around
            | SoQLFloatingTimestamp => if (!sql.matches(".*(day|year|month).*")) s"TIMESTAMP_TO_MSEC($sql)" else sql
-        case SoQLPoint => s"$sql.lat, $sql.long"
+        case SoQLPoint => s"$sql.lat, $sql.long"  // column represents a nested field in BQ, lat, long
         case _ => sql
       }
       (t2._1 :+ conversion, newSetParams)
     }
-    (funcAlias(conv), params)
+    if (analysis.groupBy.isEmpty && analysis.orderBy.isEmpty) (conv, params)
+    else (funcAlias(conv), params)
   }
 
   /**
-   * Maps each function in the select statement so that it can be referenced outside of the SELECT clause
-   * statement if it is present there.
+   * Maps each function in the select statement to an alias so that it can be referenced outside of the SELECT clause.
+   * BigQuery does not allow function calls in the GROUP BY or ORDER BY clauses.
+   *
+   * Example:
+   *
+   * ['sum(u_ty3g_fj3t)', 'u_t3ty_f2g3'] => ['sum(u)ty3g_fj3t) AS __0]', 'u_t3ty_f2g3']
+   *
+   * @param select A sequence of strings representing columns to be selected.
+   * @return the selection strings, where selections that contain functions are followed by "... AS __x ...",
+   *         where x is a number that uniquely identifies that alias
    */
   private def funcAlias(select: Seq[String]): Seq[String] = {
     select.zipWithIndex.map{
       case (sql, index) =>
-        // check if it matches one of the aggregates and it doesn't contain any spaces.
-      if (sql.toLowerCase.matches(".*(sum|avg|count|min|max|floor|abs|day|hour|year|length|cast|timestamp|utc|msec).*") && !sql.contains(" ")) {
-        val alias = s"${sql.replaceAll(convToUnderScore, "_")}$index"
+        // check if the selection is a function call, matching the pattern "... function_name(.*) ..."
+      if (sql.toLowerCase.matches(".*\\w+\\(.*\\).*")) {
+        val alias = s"__$index"
         val newSql = s"$sql AS $alias"
         aliasMap += (sql -> alias)
         newSql
       } else {
         sql
-      }}
+      }
+    }
   }
-
-  /**
-   * Basically, analysis for row count has select, limit and offset removed.
-   * TODO: select count(*) // w/o group by which result is always 1.
-   * @param a original query analysis
-   * @return Analysis for generating row count sql.
-   */
-  private def rowCountAnalysis(a: SoQLAnalysis[UserColumnId, SoQLType]): SoQLAnalysis[UserColumnId, SoQLType] =
-    a.copy(selection = a.selection.empty, orderBy =  None, limit = None, offset = None)
-
 }

@@ -2,10 +2,9 @@ package com.socrata.bq.server
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
-import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
-import com.socrata.bq.store.BigqueryUtils
+import com.socrata.bq.store.BBQCommon
 
 import scala.language.existentials
 import com.rojoma.json.v3.ast.JString
@@ -16,55 +15,48 @@ import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.id.{RollupName, ColumnId, UserColumnId}
-import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.common.AuxiliaryData
 import com.socrata.http.common.livenesscheck.LivenessCheckInfo
 import com.socrata.http.server._
 import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.implicits._
-import com.socrata.http.server.livenesscheck.{LivenessCheckConfig, LivenessCheckResponder}
+import com.socrata.http.server.livenesscheck.LivenessCheckResponder
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.RequestId.ReqIdHeader
-import com.socrata.bq.{SecondaryBase, Version}
+import com.socrata.bq.Version
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.bq.Schema._
 import com.socrata.bq.query._
 import com.socrata.bq.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.bq.soql._
-import com.socrata.bq.soql.bqreps.MultiPolygonRep
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 import com.socrata.bq.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{TypeName, ColumnName}
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.{FunctionCall, CoreExpr}
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
-import com.socrata.thirdparty.metrics.{SocrataHttpSupport, Metrics, MetricsReporter}
+import com.socrata.thirdparty.metrics.{SocrataHttpSupport, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
+import javax.servlet.http.HttpServletResponse
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 
-class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
+class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends Logging {
   import QueryServer._
-
-  val dsConfig: DataSourceConfig = null // unused
-
-  val postgresUniverseCommon = PostgresUniverseCommon
 
   private val JsonContentType = "application/json; charset=utf-8"
 
@@ -72,7 +64,6 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     import SimpleRouteContext._
     Routes(
       Route("/schema", SchemaResource),
-      Route("/rollups", RollupResource),
       Route("/query", QueryResource),
       Route("/version", VersionResource)
     )
@@ -98,6 +89,17 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     override val get = schema _
   }
 
+  object QueryResource extends SimpleResource {
+    override val get = query _
+    override val post = query _
+  }
+
+  /**
+   * Look up schema for the /schema API endpoint
+   * @param req GET request specifying a dataset name
+   * @return HTTP response containing the schema of a dataset, if known.
+   *         Returns a 404 if that dataset is unknown.
+   */
   def schema(req: HttpRequest): HttpResponse = {
     val servReq = req.servletRequest
     val ds = servReq.getParameter("ds")
@@ -118,49 +120,29 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
-  object RollupResource extends SimpleResource {
-    override val get = rollups _
-  }
-
-  def rollups(req: HttpRequest): HttpResponse = {
+  /**
+   * Perform the requested query
+   * @param req GET or POST request containing the query and associated information
+   * @return HTTP response containing the result of the query, plus the schema of the dataset.
+   *         Returns a 404 (Not Found) if the dataset is unknown.
+   *         Returns a 304 (Not Modified) if the response is unmodified.
+   */
+  def query(req: HttpRequest): HttpServletResponse => Unit =  {
     val servReq = req.servletRequest
-    val ds = servReq.getParameter("ds")
+    val datasetId = servReq.getParameter("dataset")
+    val analysisParam = servReq.getParameter("query")
+    val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
+    val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val copy = Option(servReq.getParameter("copy"))
-    val includeUnmaterialized = java.lang.Boolean.parseBoolean(servReq.getParameter("include_unmaterialized"))
-    getRollups(ds, copy, includeUnmaterialized) match {
-      case Some(rollups) =>
-        OK ~> Write(JsonContentType)(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
-      case None =>
-        NotFound
-    }
-  }
 
-  object QueryResource extends SimpleResource {
-    override val get = query _
-    override val post = query _
+    logger.debug("Performing query on dataset " + datasetId)
+    streamQueryResults(analysis, datasetId, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   def etagFromCopy(datasetInternalName: String, copyNum: Long, versionNum: Long): EntityTag = {
     // ETag is a hash based on datasetInternalName_copyNumber_version
     val etagContents = s"${datasetInternalName}_${copyNum}_${versionNum}"
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
-  }
-
-  def query(req: HttpRequest): HttpServletResponse => Unit =  {
-    logger.info("query called")
-
-    val servReq = req.servletRequest
-    val datasetId = servReq.getParameter("dataset")
-    val analysisParam = servReq.getParameter("query")
-    val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
-    val schemaHash = servReq.getParameter("schemaHash")
-    val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
-    val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
-    val copy = Option(servReq.getParameter("copy"))
-//    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
-
-    logger.debug("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -171,30 +153,24 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
   def streamQueryResults(
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     datasetName:String,
-    reqRowCount: Boolean,
     copy: Option[String],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
-    // TODO: Factor out PGU and replace with BigQueryUtils functions, make linear
-    logger.info(s"analysis: ${analysis.toString()}")
-
-    logger.debug(s"streamQueryResults called on dataset $datasetName")
     val datasetId = new DatasetId(bqUtils.parseDatasetId(datasetName))
     bqUtils.getMetadataEntry(datasetName) match {
       case Some(cinfo) =>
-        def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
-
-        execQuery(datasetName, datasetId, cinfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+        logger.debug(s"Found metadata for dataset $datasetName")
+        execQuery(datasetName, cinfo, analysis, copy, precondition, ifModifiedSince) match {
           case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
             // Very weird separation of concerns between execQuery and streaming. Most likely we will
             // want yet-another-refactoring where much of execQuery is lifted out into this function.
             // This will significantly change the tests; however.
-            logger.info("Success, writing results with CJSONWriter")
+            logger.debug("Success, writing results with CJSONWriter")
             ETag(etag)(resp)
             copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
             for (r <- results) yield {
-              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, reqRowCount, dataVersion, lastModified)(resp)
+              CJSONWriter.writeCJson(Some(cinfo.obfuscationKey), qrySchema, r, dataVersion, lastModified, cinfo.locale)(resp)
             }
           case NotModified(etags) =>
             notModified(etags)(resp)
@@ -202,64 +178,29 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
             responses.PreconditionFailed(resp)
         }
       case None =>
-        logger.info(s"No metadata entry for dataset $datasetId")
+        logger.info(s"No metadata entry for dataset $datasetName")
         NotFound(resp)
     }
   }
 
+  /**
+   * Checks modification date of dataset to determine if response has changed. Executes the query if the dataset
+   * has been modified and returns results.
+   * @return QueryResult containing the result of the query
+   */
   def execQuery(
     datasetInternalName: String,
-    datasetId: DatasetId,
     cinfo: BBQDatasetInfo,
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
-    rowCount: Boolean,
     reqCopy: Option[String],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
 
-    def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
-      logger.debug(s"runQuery called on $datasetInternalName ($datasetId")
-      val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
-      val sqlCtx = Map[SqlizerContext, Any](
-        SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
-        SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-        SqlizerContext.CaseSensitivity -> caseSensitivity
-      )
-      val escape = (stringLit: String) => SqlUtils.escapeString(stringLit)
-
-      val userToSystemColumnMap = bqUtils.getUserToSystemColumnMap(datasetId.underlying).getOrElse {
-        sys.error("Could not obtain systemToUserColumnMap")
-      }
-      val bqReps = generateReps(analysis)
-      val qrySchema = querySchema(analysis)
-      val bqRowReader = new BQRowReader[SoQLType, SoQLValue]
-
-      // Print the schema for this query
-      logger.debug("Query schema: ")
-      bqReps.foreach { case (k, v) =>
-        logger.debug(s"$k: ${v.repType}")
-      }
-
-      val bqTableName = bqUtils.makeFullTableIdentifier(config.bigqueryDatasetId, datasetInternalName, cinfo.copyNumber)
-      val results = managed(bqRowReader.query(
-        analysis,
-        (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-          new SoQLAnalysisSqlizer(a, tableName).sql(userToSystemColumnMap.map { case (uid, cid) => uid -> bqUtils.makeColumnName(cid, uid) }, Seq.empty, sqlCtx, escape),
-        rowCount,
-        bqReps,
-        new BigQueryQuerier(config.bigqueryProjectId),
-        bqTableName))
-      (qrySchema, results)
-
-    }
-
-    logger.debug(s"execQuery called on $datasetInternalName ($datasetId")
-
     val copyNumber = cinfo.copyNumber
     val versionNumber = cinfo.dataVersion
-    val etag = etagFromCopy(datasetInternalName, copyNumber, versionNumber)
     val lastModified = cinfo.lastModified
+    val etag = etagFromCopy(datasetInternalName, copyNumber, versionNumber)
 
     // Conditional GET handling
     precondition.check(Some(etag), sideEffectFree = true) match {
@@ -269,7 +210,7 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            val (qrySchema, results) = runQuery(analysis, rowCount)
+            val (qrySchema, results) = runQuery(analysis, cinfo, datasetInternalName)
             Success(qrySchema, copyNumber, versionNumber, results, etag, lastModified)
         }
       case FailedBecauseMatch(etags) =>
@@ -279,42 +220,70 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
-  // TODO: not used
-  private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
-                                                   pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                                                   copyInfo: CopyInfo,
-                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]]):
-    PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
+  /**
+   * Converts the analysis to a SQL query, then runs the query against the specified dataset in BigQuery and acquires
+   * the results.
+   * @return an iterator over the datacoordinator.Rows in the result of the query
+   *         and a QuerySchema describing the schema of the dataset
+   */
+  def runQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType], cinfo: BBQDatasetInfo, datasetInternalName: String) = {
+    val cryptProvider = new CryptProvider(cinfo.obfuscationKey)
+    val sqlCtx = Map[SqlizerContext, Any](
+      SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
+      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+      SqlizerContext.CaseSensitivity -> caseSensitivity
+    )
 
-    logger.debug("readerWithQuery called")
+    // A function that escapes control characters and special characters for BigQuery queries
+    val escape = (stringLit: String) => SqlUtils.escapeString(stringLit)
 
-    val tableName = copyInfo.dataTableName
+    // A mapping from user column id to physical column name (as stored in BigQuery)
+    val userToPhysicalColumnMapping = bqUtils.getUserToSystemColumnMap(datasetInternalName).getOrElse {
+      sys.error("Could not obtain systemToUserColumnMap")
+    }
+    val bqReps = generateReps(analysis)
+    val qrySchema = querySchema(analysis)
+    val bqRowReader = new BBQRowReader[SoQLType, SoQLValue]
 
-    new PGSecondaryRowReader[SoQLType, SoQLValue] (
-      conn,
-      new PostgresRepBasedDataSqlizer(tableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
-      pgu.commonSupport.timingReport) with RowReaderQuerier[SoQLType, SoQLValue]
+    // Print the schema for this query
+    logger.debug("Query schema: ")
+    bqReps.foreach { case (k, v) => logger.debug(s"$k: ${v.repType}") }
+
+    // We need a table name in the form: [dataset-id.table-name] to execute the query
+    val bqTableName = bqUtils.makeFullTableIdentifier(config.bigqueryDatasetId, datasetInternalName, cinfo.copyNumber)
+
+    // Execute the query and retrieve an iterator containing the results
+    val results = managed(bqRowReader.query(
+      analysis,
+      (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+        new SoQLAnalysisSqlizer(a, tableName).sql(userToPhysicalColumnMapping, Seq.empty, sqlCtx, escape),
+      bqReps,
+      new BBQQuerier(config.bigqueryProjectId),
+      bqTableName))
+    (qrySchema, results)
   }
 
+  def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
+
   /**
+   * Use the query schema to create the appropriate BigQueryReps for the SoQLTypes associated with each column.
    * @param analysis parsed soql
-   * @return Use the query schema to create the appropriate BigQueryReps for the SoQLTypes
-   *         associated with each column.
+   * @return a map from column id to conversion rep
    */
   // TODO: Handle expressions and column aliases.
   private def generateReps(analysis: SoQLAnalysis[UserColumnId, SoQLType]):
-                  OrderedMap[ColumnId, BigQueryReadRep[SoQLType, SoQLValue]] = {
+                  OrderedMap[ColumnId, BBQReadRep[SoQLType, SoQLValue]] = {
 
-    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, BigQueryReadRep[SoQLType, SoQLValue]]) { (map, entry) =>
+    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, BBQReadRep[SoQLType, SoQLValue]]) { (map, entry) =>
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
           val cid = new ColumnId(map.size + 1)
+
+          // The "extent" query is a special case of querying SoQLPoints but returning a SoQLMultiPolygon,
+          // so we need to create a BoundingBoxRep to perform that conversion
           val bqRep = coreExpr match {
-            case FunctionCall(function, _) if function.function.identity == "extent" => {
-              logger.info("Bounding box rep")
-              new BoundingBoxRep
-            }
-            case otherExpr => BigQueryRepFactory(otherExpr.typ)
+            case FunctionCall(function, _) if function.function.identity == "extent" => new BoundingBoxRep
+            case otherExpr => BBQRepFactory(otherExpr.typ)
           }
           map + (cid -> bqRep)
       }
@@ -322,8 +291,8 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
   }
 
   /**
+   * A schema for use in JSON response to /query API endpoint
    * @param analysis parsed soql
-   * @param latest
    * @return a schema for the selected columns
    */
   // TODO: Handle expressions and column aliases.
@@ -349,55 +318,12 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BigqueryUtils, val
     }
   }
 
-  // TODO: this is never used
-  def getRollups(ds: String, reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
-    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      for {
-        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
-        datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
-      } yield {
-        val copy = getCopy(pgu, datasetInfo, reqCopy)
-        if (includeUnmaterialized || RollupManager.shouldMaterializeRollups(copy.lifecycleStage)) {
-          pgu.datasetMapReader.rollups(copy)
-        } else {
-          None
-        }
-      }
-    }
-  }
-
-  // Returns the schema the /schema API endpoint
+    /**
+     * Returns the schema for the /schema API endpoint
+     * @param datasetName dataset name in the form "primus.123"
+     */
   private def getSchema(datasetName : String): Option[Schema] = {
     bqUtils.getSchema(datasetName)
-  }
-
-  // TODO: this is no longer used
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
-                      : Option[CopyInfo] = {
-    for {
-      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
-      datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
-    } yield {
-      getCopy(pgu, datasetInfo, reqCopy)
-    }
-  }
-
-  // TODO: this is no longer used
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
-    val intRx = "^[0-9]+$".r
-    val rd = pgu.datasetMapReader
-    reqCopy match {
-      case Some("latest") =>
-        rd.latest(datasetInfo)
-      case Some("published") | None =>
-        rd.published(datasetInfo).getOrElse(rd.latest(datasetInfo))
-      case Some("unpublished") | None =>
-        rd.unpublished(datasetInfo).getOrElse(rd.latest(datasetInfo))
-      case Some(intRx(num)) =>
-        rd.copyNumber(datasetInfo, num.toLong).getOrElse(rd.latest(datasetInfo))
-      case Some(unknown) =>
-        throw new IllegalArgumentException(s"invalid copy value $unknown")
-    }
   }
 
   private def copyInfoHeader(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
@@ -427,21 +353,17 @@ object QueryServer extends DynamicPortMap with Logging {
     if(ifaces.isEmpty) config
     else {
       val first = JString(ifaces.iterator.next().getHostAddress)
-//      Console.err.println("first" + first)
       val addressConfig = ConfigFactory.parseString("com.socrata.soql-server-bq.service-advertisement.address=" + first)
-//      Console.err.println("addressConfig" + addressConfig)
       config.withFallback(addressConfig)
     }
   }
 
   val config = try {
-//    Console.err.println(ConfigFactory.load())
-//    Console.err.println(withDefaultAddress(ConfigFactory.load()))
     new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-bq")
   } catch {
     case e: Exception =>
-      Console.err.println(e)
-      Console.err.println("config function broke")
+      logger.error(s"$e")
+      logger.error("config function broke")
       sys.exit(1)
   }
 
@@ -468,7 +390,7 @@ object QueryServer extends DynamicPortMap with Logging {
       reporter <- MetricsReporter.managed(config.metrics)
     } {
       pong.start()
-      val queryServer = new QueryServer(config, new BigqueryUtils(dsInfo, config.bigqueryProjectId), dsInfo, CaseSensitive)
+      val queryServer = new QueryServer(config, new BBQCommon(dsInfo, config.bigqueryProjectId), dsInfo, CaseSensitive)
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))

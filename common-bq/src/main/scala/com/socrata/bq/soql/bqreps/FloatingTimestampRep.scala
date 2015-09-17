@@ -1,23 +1,23 @@
 package com.socrata.bq.soql.bqreps
 
 import com.rojoma.json.v3.ast.{JString, JNull, JValue}
-import com.socrata.bq.soql.BigQueryRep
+import com.socrata.bq.soql.{BigqueryType, BBQRep}
 import com.socrata.soql.types.{SoQLNull, SoQLFloatingTimestamp, SoQLType, SoQLValue}
 import org.joda.time.{DateTimeZone, LocalDateTime}
 
-class FloatingTimestampRep extends BigQueryRep[SoQLType, SoQLValue] {
+class FloatingTimestampRep extends BBQRep[SoQLType, SoQLValue] {
 
   override def repType: SoQLType = SoQLFloatingTimestamp
 
-  override val bigqueryType: String = "TIMESTAMP"
+  override val bigqueryType = BigqueryType.Timestamp
 
-  override def SoQL(row: Seq[String]): SoQLValue = {
-    if (row.head== null)
+  override def SoQL(cols: Seq[String]): SoQLValue = {
+    if (cols.head== null)
       SoQLNull
     else
       // Timestamp strings can be returned from BQ as either plain numbers or scientific notation,
       // so we need the additional toDouble conversion to avoid NumberFormatExceptions
-      SoQLFloatingTimestamp(new LocalDateTime(row.head.toDouble.toLong, DateTimeZone.UTC))
+      SoQLFloatingTimestamp(new LocalDateTime(cols.head.toDouble.toLong, DateTimeZone.UTC))
   }
 
   override def jvalue(value: SoQLValue): JValue = {
@@ -25,5 +25,5 @@ class FloatingTimestampRep extends BigQueryRep[SoQLType, SoQLValue] {
     else JString(SoQLFloatingTimestamp.StringRep(value.asInstanceOf[SoQLFloatingTimestamp].value))
   }
 
-  override def numColumns: Int = 1
+  override val numColumns: Int = 1
 }

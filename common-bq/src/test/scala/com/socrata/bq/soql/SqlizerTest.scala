@@ -1,20 +1,14 @@
 package com.socrata.bq.soql
 
 import org.scalatest.{Matchers, FunSuite}
-import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.truth.metadata.ColumnInfo
+import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.bq.soql.SqlizerContext._
-import com.socrata.bq.store.PostgresUniverseCommon
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.bq.store.BigqueryUtils
-
 
 class SqlizerTest extends FunSuite with Matchers {
 
@@ -36,26 +30,17 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams should be (Seq("'ha001'", "'ha002'", "'ha003'"))
   }
 
-  // NOTE: Some tests commented out because the BQ Query Server does not test case insensitivity
-//  test("field in (x, y...) ci") {
-//    val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number limit 2"
-//    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-//    sql should be ("SELECT case_number FROM t1 WHERE (upper(case_number) in(?,?,?)) ORDER BY case_number LIMIT 2")
-//    setParams.length should be (3)
-//    setParams should be (Seq("'HA001'", "'HA002'", "'HA003'"))
-//  }
-
   test("as implicit alias order by") {
     val soql = "select sum(id) order by sum(id) limit 2"
     val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-    sql should be ("SELECT (sum(id)) AS _sum_id__0 FROM t1 ORDER BY _sum_id__0 LIMIT 2")
+    sql should be ("SELECT (sum(id)) AS __0 FROM t1 ORDER BY __0 LIMIT 2")
     setParams.length should be (0)
   }
 
   test("as implicit alias no forward alias reference") {
     val soql = "select sum(id) group by id limit 2"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (sum(id)) AS _sum_id__0 FROM t1 GROUP BY id LIMIT 2")
+    sql should be ("SELECT (sum(id)) AS __0 FROM t1 GROUP BY id LIMIT 2")
   }
 
   test("extent") {
@@ -73,14 +58,6 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams should be (Seq("1", "'cn001'"))
   }
 
-//  test("expr and expr ci") {
-//    val soql = "select id where id = 1 and case_number = 'cn001'"
-//    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-//    sql should be ("SELECT id FROM t1 WHERE ((id = ?) and (upper(case_number) = ?))")
-//    setParams.length should be (2)
-//    setParams should be (Seq("1", "'CN001'"))
-//  }
-
   test("point conversion") {
     val soql = "select point limit 2"
     val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
@@ -95,14 +72,6 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams.length should be (1)
     setParams should be (Seq("'cn%'"))
   }
-
-//  test("starts_with has automatic suffix % ci") {
-//    val soql = "select id where starts_with(case_number, 'cn')"
-//    val BQSql(sql, setParams) = sqlize(soql, CaseInsensitive)
-//    sql should be ("SELECT id FROM t1 WHERE (upper(case_number) like ?)")
-//    setParams.length should be (1)
-//    setParams should be (Seq("'CN%'"))
-//  }
 
   test("explicit like") {
     val soql = "select case_number where case_number like '%10%'"
@@ -123,15 +92,14 @@ class SqlizerTest extends FunSuite with Matchers {
   test("select count(*)") {
     val soql = "select count(*)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(*)) AS _count____0 FROM t1")
+    sql should be ("SELECT (count(*)) FROM t1")
     setParams.length should be (0)
   }
 
   test("select aggregate functions") {
     val soql = "select count(id), avg(id), min(id), max(id), sum(id)"
     val BQSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(id)) AS _count_id__0,(avg(id)) AS _avg_id__1,(min(id)) AS _min_id__2,(max(id)) AS " +
-      "_max_id__3,(sum(id)) AS _sum_id__4 FROM t1")
+    sql should be ("SELECT (count(id)),(avg(id)),(min(id)),(max(id)),(sum(id)) FROM t1")
     setParams.length should be (0)
   }
 
@@ -164,14 +132,8 @@ object SqlizerTest {
   )
 
   private def sqlize(soql: String, caseSensitivity: CaseSensitivity): BQSql = {
-    val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
     (analysis, "t1").sql(
-//      columnMap.map {
-//        case (cid, cinfo) =>
-//          val uid = new UserColumnId(cid.toString())
-//          (uid, BigqueryUtils.makeColumnName(new ColumnId(cinfo._1), uid))
-//      },
       columnMap.map { case (cname, cinfo) => (new UserColumnId(cname.toString()), cname.toString()) },
       Seq.empty,
       sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity),
@@ -202,21 +164,6 @@ object SqlizerTest {
     ColumnName("line") -> (17, SoQLLine),
     ColumnName("multipoint") -> (18, SoQLMultiPoint)
   )
-
-  private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {
-    case (columnName: ColumnName, (id, typ)) =>
-      val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType](
-        null,
-        new ColumnId(id),
-        new UserColumnId(columnName.caseFolded),
-        typ,
-        columnName.caseFolded,
-        typ == SoQLID,
-        false, // isUserKey
-        typ == SoQLVersion
-      )(SoQLTypeContext.typeNamespace, null)
-      acc :+ cinfo
-  }}
 
   private val datasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
     val schema = new OrderedMap[ColumnName, SoQLType](columnMap,  columnMap.keys.toVector)
