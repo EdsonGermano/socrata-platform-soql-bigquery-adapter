@@ -2,7 +2,7 @@ soql-bigquery-adapter
 =====================
 
 The Bigquery Adapter for SODAServer includes:
-- **soql-server-bq**: query server for querying datasets in Google BigQuery
+- **soql-server-bq**: query server for querying datasets in Google Bigquery
   - [Docker README](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/soql-server-bq/docker/README.md)
 - **secondary-watcher-bq**: secondary watcher plugin for replicating (big) data
   - [Docker README](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/store-bq/docker/README.md)
@@ -11,7 +11,7 @@ The Bigquery Adapter for SODAServer includes:
 
 You can access the Google Bigquery console for a particular table at [https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name](https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name).
 
-There are three levels of organization within Bigquery: projects, datasets, and tables. Bigquery projects contain datasets, each of which contain tables, which actually store data. In the image below, `alpha_49088_1` is a table, `socrata_staging` is a dataset, and `socrata-data` is a project.
+There are three levels of organization within Bigquery: projects, datasets, and tables. Bigquery projects contain datasets, each of which contain tables, which actually store data. In the image below, `socrata-data` is a project, `socrata_staging` is a dataset, and `alpha_49088_1` is a table.
 
 **Note**: Your project id is not necessarily the same as your project's name. In the image below, `thematic-bee-98521` is the project id.
 
