@@ -13,11 +13,11 @@ import scala.collection.JavaConverters._
 class BBQRowReader[CT, CV] extends Logging {
 
   /**
-   * Runs a query against Bigquery and returns an iterator of results
+   * Execute a query against BigQuery and return the results and row count
    * @param analysis parsed soql
-   * @param toSql converts parsed soql to SQL statement
-   * @param bqReps reps for each column selected in the SQL statement
-   * @param querier Bigquery connection class to execute the query
+   * @param toSql function to convert the analysis to BQSql
+   * @param bqReps a map from column id to conversion rep for each column selected in the query
+   * @param querier connection to BigQuery for executing the query
    * @param bqTableName table name in Bigquery in the form '[dataset-id.table-name]'
    * @return an iterator over the result of the query and an exact row count
    */
@@ -29,19 +29,18 @@ class BBQRowReader[CT, CV] extends Logging {
   CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     val bQSql = toSql(analysis, bqTableName)
+    val queryStr = bQSql.injectParams
 
-    logger.debug(s"Raw query $bQSql")
-
-    val params = bQSql.setParams.toIterator
-    val queryStr = bQSql.sql.toList.map(e => e.toString).map(s => if (s.equals("?") && params.hasNext) params.next else s).mkString
-
+    logger.debug(s"Raw query: $bQSql")
     logger.debug(s"Query: $queryStr")
 
+    // For each selected column's rep, grab the `soql` function and the `numColumns` consumed
     val decoders = bqReps.map { case (cid, rep) =>
       (cid, rep.numColumns, rep.SoQL(_))
     }.toArray
 
-    // get rows
+    // If the query contains a selection, issue the query and return an iterator over the resulting rows, otherwise
+    // return an empty iterator
     if (analysis.selection.size > 0) {
       val bqResult = querier.query(queryStr)
       new BigQueryResultIt(bqResult, decodeBigQueryRow(decoders))
@@ -54,21 +53,21 @@ class BBQRowReader[CT, CV] extends Logging {
   /**
    * Convert data in a row using the series of provided 'decoder' functions
    * @param decoders array of Tuple3[column id, number of columns to read, decoder function]
-   * @param r row to process
+   * @param originalRow row to process
    */
   def decodeBigQueryRow(decoders: Array[(ColumnId, Int, ((Seq[String]) => CV))])
-                       (r: Seq[String]): com.socrata.datacoordinator.Row[CV] = {
+                       (originalRow: Seq[String]): com.socrata.datacoordinator.Row[CV] = {
 
-    val row = new MutableRow[CV]
+    val decodedRow = new MutableRow[CV]
     var i = 0
 
     // Iterate over the column reps and process as many columns from the row as that rep requires,
     // moving forward in the row as columns are read
     decoders.foreach { case (cid, numColumns, bqExtractor) =>
-      row(cid) = bqExtractor(r.slice(i, i + numColumns))
+      decodedRow(cid) = bqExtractor(originalRow.slice(i, i + numColumns))
       i += numColumns
     }
-    row.freeze()
+    decodedRow.freeze()
   }
 
   /**
@@ -80,7 +79,6 @@ class BBQRowReader[CT, CV] extends Logging {
     extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
     var rowCount: Option[Long] = None
-
     private var rowIt: Option[Iterator[TableRow]] = None
 
     override def next(): Row[CV] = {
@@ -126,6 +124,9 @@ object EmptyIt extends CloseableIterator[Nothing] with RowCount {
   def close() {}
 }
 
+/**
+ * An exact row count for a query result
+ */
 trait RowCount {
   def rowCount: Option[Long]
 }

@@ -7,7 +7,21 @@ import com.socrata.soql.types._
 import com.socrata.bq.soql.SqlizerContext.SqlizerContext
 
 
-case class BQSql(sql: String, setParams: Seq[String])
+case class BQSql(sql: String, setParams: Seq[String]) {
+
+  // This is a little awful but... we are working with a String built up from other Strings, not ParametricSql
+  def injectParams: String = {
+    var i = -1
+    val result = new StringBuilder()
+    sql.split(" ").foreach {
+      case "?" =>
+        i += 1
+        result.append(setParams(i) + " ")
+      case str => result.append(str + " ")
+    }
+    result.toString()
+  }
+}
 
 trait Sqlizer[T] {
 
