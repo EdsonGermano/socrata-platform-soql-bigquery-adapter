@@ -25,10 +25,6 @@ Bigquery uses a SQL-like language that supports most SQL clauses and has a [vari
 
 Whether you are uploading data using the **secondary-watcher-bq** plugin, or through Google Bigquery's frontend interface, be aware that it may take several minutes for data to actually appear in your tables after the load jobs have completed.
 
-## Build Requirements
-sbt
-webdav4sbt - available at https://bitbucket.org/diversit/webdav4sbt.git
-
 ## Build and Test
 
 ```sh
