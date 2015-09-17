@@ -1,9 +1,25 @@
 soql-bigquery-adapter
 =====================
 
-The BigQuery Adapter for SODAServer includes:
+The Bigquery Adapter for SODAServer includes:
 - **soql-server-bq**: query server for querying datasets in Google BigQuery
 - **secondary-watcher-bq**: secondary watcher plugin for replicating (big) data
+
+## About Google Bigquery
+
+You can access the Google Bigquery console for a particular table at [https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name](https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name).
+
+There are three levels of organization within Bigquery: projects, datasets, and tables. Bigquery projects contain any number of datasets. Each dataset can have any number of tables, which actually contain data. NOTE: Your project id is not necessarily the same as your project's name.
+
+!["Bigquery project structure"](/images/project-hierarchy.png "")
+
+The Bigquery console allows you to issue queries against your tables:
+
+!["Query"](/images/query.png "")
+
+Whether you are uploading data using the **secondary-watcher-bq**, or through Google Bigquery's frontend interface, it may take several minutes for data to actually appear in your tables after the load jobs have completed.
+
+The **secondary-watcher-bq** uses load jobs, not streaming inserts, to put data in Bigquery. You can read about load job quotas [here](https://cloud.google.com/bigquery/quota-policy#import).
 
 ## Build Requirements
 sbt
