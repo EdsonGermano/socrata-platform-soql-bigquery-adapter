@@ -3,7 +3,9 @@ soql-bigquery-adapter
 
 The Bigquery Adapter for SODAServer includes:
 - **soql-server-bq**: query server for querying datasets in Google BigQuery
+  - [Docker README](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/soql-server-bq/docker/README.md)
 - **secondary-watcher-bq**: secondary watcher plugin for replicating (big) data
+  - [Docker README](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/store-bq/docker/README.md)
 
 ## About Google Bigquery
 
@@ -81,5 +83,11 @@ Running from sbt is recommended in a development environment because it ensures 
 
 ```
 curl http://localhost:6060/version
+```
+
+Example response:
+
+```
+{"service":"soql-server-bq","version":"0.6.11-SNAPSHOT","revision":"9311523301-dirty","scala":"2.10.4"}
 ```
 
