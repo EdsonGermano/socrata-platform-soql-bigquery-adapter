@@ -7,6 +7,8 @@ copied to `soql-server-pg-assembly.jar` in this directory before building.
 
 * `PG_SECONDARY_DB_HOST` - Data Coordinator DB hostname
 * `PG_SECONDARY_DB_PASSWORD_LINE` - Full line of config for soql-server-pg DB password.  Designed to be either `password = "foo"` or `include /path/to/file`.
+* `PROJECT-ID` - The Bigquery project id
+* `DATASET_ID` - The Bigquery dataset id
 * `ZOOKEEPER_ENSEMBLE` - The zookeeper cluster to talk to, in the form of `["10.0.0.1:2181", "10.0.0.2:2818"]`
 
 ## Optional Runtime Variables
@@ -19,7 +21,7 @@ See the Dockerfile for defaults.
 * `GRAPHITE_PORT` - The port number for the graphite server, if enabled
 * `JAVA_XMX` - Sets the -Xmx and -Xms parameters to control the JVM heap size
 * `LOG_METRICS` - Should various metrics information be logged to the log
-* `PG_SECONDARY_DB_NAME` - soql-server-pg DB database name
-* `PG_SECONDARY_DB_PORT` - soql-server-pg DB port number
-* `PG_SECONDARY_DB_USER` - soql-server-pg DB user name
-* `PG_SECONDARY_INSTANCE` - soql-server-pg instance name
+* `PG_SECONDARY_DB_NAME` - soql-server-bq DB database name
+* `PG_SECONDARY_DB_PORT` - soql-server-bq DB port number
+* `PG_SECONDARY_DB_USER` - soql-server-bq DB user name
+* `BQ_SECONDARY_INSTANCE` - soql-server-bq instance name
