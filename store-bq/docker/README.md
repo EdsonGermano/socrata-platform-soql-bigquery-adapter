@@ -10,7 +10,7 @@ are required.
 
 In addition, the following is required:
 
-* `PG_SECONDARY_DB_PASSWORD_LINE` - Full line of config for soql-server-bq DB password.  Designed to be either `password = "foo"` or `include /path/to/file`.  Must be the same across all instances.
+* `PG_SECONDARY_DB_PASSWORD_LINE` - Full line of config for DB password.  Designed to be either `password = "foo"` or `include /path/to/file`.  Must be the same across all instances.
 * `PROJECT-ID` - The Bigquery project id
 * `DATASET_ID` - The Bigquery dataset id
 * `BATCH_SIZE` - The maximum number of bytes to send in a load job.
@@ -24,8 +24,6 @@ In addition, the following optional variables are supported.  For defaults, see 
 
 * `LOG_METRICS` - Should various metrics information be logged to the log
 * `LOG_LEVEL` - The logging level
-* `PG_SECONDARY_DB_NAME` - soql-server-bq DB database name.  Must be the same across all instances.
-* `PG_SECONDARY_DB_PORT` - soql-server-bq DB port number.  Must be the same across all instances.
-* `PG_SECONDARY_DB_USER` - soql-server-bq DB user name.  Must be the same across all instances.
-* `PG_SECONDARY_NUM_WORKERS` - Number of workers to run per secondary instance.
-* `PG_SECONDARY_TABLESPACE_FN` - A Clojure function used to generate the tablespace name for datasets.
+* `PG_SECONDARY_DB_NAME` - DB database name.
+* `PG_SECONDARY_DB_PORT` - DB port number.
+* `PG_SECONDARY_DB_USER` - DB user name.
