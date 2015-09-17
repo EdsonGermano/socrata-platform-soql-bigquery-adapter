@@ -9,15 +9,17 @@ The Bigquery Adapter for SODAServer includes:
 
 You can access the Google Bigquery console for a particular table at [https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name](https://bigquery.cloud.google.com/table/your-project-id:your-dataset-id.your-table-name).
 
-There are three levels of organization within Bigquery: projects, datasets, and tables. Bigquery projects contain datasets, each of which contain tables, which actually store data. In the image below, `alpha_49088_1` is a table, `socrata_staging` is a dataset, and `socrata-data` is a project. NOTE: Your project id is not necessarily the same as your project's name. In the image below, `thematic-bee-98521` is the project id.
+There are three levels of organization within Bigquery: projects, datasets, and tables. Bigquery projects contain datasets, each of which contain tables, which actually store data. In the image below, `alpha_49088_1` is a table, `socrata_staging` is a dataset, and `socrata-data` is a project.
+
+**Note**: Your project id is not necessarily the same as your project's name. In the image below, `thematic-bee-98521` is the project id.
 
 !["Bigquery project structure"](/images/project-hierarchy.png "")
 
-Bigquery uses a SQL-like language that supports most SQL clauses and has a [variety of useful functions](https://cloud.google.com/bigquery/query-reference). The **soql-server-bq** supports most basic SoQL operations, including the majority of queries used on Data Lens pages. However, there is limited support for geo-spatial functions. You can issue queries against your tables using the Bigquery console.
+Bigquery uses a SQL-like language that supports most SQL clauses and has a [variety of useful functions](https://cloud.google.com/bigquery/query-reference). **soql-server-bq** supports most basic SoQL operations, including the majority of queries used on Data Lens pages; however, there is limited support for geo-spatial functions. You can issue queries against your tables using the Bigquery console.
 
 !["Query"](/images/query.png "")
 
-The **secondary-watcher-bq** uses load jobs, not streaming inserts, to put data in Bigquery. You can read about load job quotas [here](https://cloud.google.com/bigquery/quota-policy#import).
+**secondary-watcher-bq** uses load jobs, not streaming inserts, to put data in Bigquery. You can read about load job quotas [here](https://cloud.google.com/bigquery/quota-policy#import).
 
 Whether you are uploading data using the **secondary-watcher-bq** plugin, or through Google Bigquery's frontend interface, be aware that it may take several minutes for data to actually appear in your tables after the load jobs have completed.
 
@@ -39,7 +41,7 @@ sbt test package assembly
 
 This service requires that a Google BigQuery credentials file is stored in the environment variable `GOOGLE_APPLICATION_CREDENTIALS`.
 
-This credentials file is tied to your Google BigQuery project, which you should specify in the [configuration](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/soql-server-bq/src/main/resources/reference.conf) for the project:
+This credentials file is tied to your Google Bigquery project, which you should specify in the [configuration](https://github.com/socrata-platform/soql-bigquery-adapter/blob/master/soql-server-bq/src/main/resources/reference.conf) for the project:
 
 ```
 bigquery {
@@ -50,14 +52,13 @@ bigquery {
 
 #### Assembly
 
-To create the jars:
+To create the jars from the project root:
 
 ```
-cd $BIGQUERY_ADAPTER_DIR
 sbt clean assembly
 ```
 
-Link the secondary-watcher-bq jar:
+Link the **secondary-watcher-bq** jar:
 
 ```
 ln -s ./store-bq/target/scala-2.10/store-bq-assembly-*.jar ~/secondary-stores
@@ -70,14 +71,11 @@ For active development, when you always want the latest up to date code in your 
 
     soql-bigquery-adapter/run
 
-For running the soql-bigquery-adapter as one of several microservices, it might
-be better to build the assembly and run it to save on memory:
+For running the soql-bigquery-adapter as one of several microservices, it might be better to build the assembly and run it to save on memory. After building the assembly, run:
 
     bin/start_bq_adapter.sh
 
-Running from sbt is recommended in a development environment because
-it ensures you are running the latest migrations without having to build a
-new assembly.
+Running from sbt is recommended in a development environment because it ensures you are running the latest migrations without having to build a new assembly.
 
 #### Check that the query server is up and running
 
