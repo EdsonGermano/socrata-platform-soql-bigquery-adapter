@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.{ExecutorService, Executors}
 import com.socrata.bq.soql.bqreps.MultiPolygonRep.BoundingBoxRep
 import com.socrata.bq.store.BBQCommon
+import com.socrata.curator.{DiscoveryFromConfig, CuratorFromConfig}
 
 import scala.language.existentials
 import com.rojoma.json.v3.ast.JString
@@ -45,7 +46,6 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.{FunctionCall, CoreExpr}
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.thirdparty.metrics.{SocrataHttpSupport, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
@@ -306,12 +306,14 @@ class QueryServer(val config: QueryServerConfig, val bqUtils: BBQCommon, val dsI
           val cinfo = new ColumnInfo[SoQLType](
             null,
             cid,
-            new UserColumnId(columnName.name),
+            new UserColumnId(columnName.name), // what?
+            Some(columnName),
             coreExpr.typ,
             columnName.name,
             coreExpr.typ == SoQLID,
             false, // isUserKey
-            coreExpr.typ == SoQLVersion
+            coreExpr.typ == SoQLVersion,
+            None
           )(SoQLTypeContext.typeNamespace, null)
           map + (cid -> cinfo)
       }

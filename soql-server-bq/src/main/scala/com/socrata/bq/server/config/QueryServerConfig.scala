@@ -1,8 +1,8 @@
 package com.socrata.bq.server.config
 
+import com.socrata.curator.{DiscoveryConfig, CuratorConfig}
 import com.typesafe.config.Config
 import com.socrata.http.server.livenesscheck.LivenessCheckConfig
-import com.socrata.thirdparty.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
 
