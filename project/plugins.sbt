@@ -1,5 +1,5 @@
 resolvers ++= Seq(
-  "socrata maven" at "https://repository-socrata-oss.forge.cloudbees.com/release"
+  "socrata maven" at "https://repo.socrata.com/artifactory/libs-release"
 )
 
 addSbtPlugin("com.socrata" % "socrata-cloudbees-sbt" % "1.3.0")
